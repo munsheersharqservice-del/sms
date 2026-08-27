@@ -1,0 +1,6 @@
+{
+  "name": "Sharq Medical Supply Service Portal",
+  "description": "Service Portal for Sharq Medical Supply managing cases, assets, work orders, engineer desks, requests, and project tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
