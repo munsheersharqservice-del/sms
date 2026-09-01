@@ -694,7 +694,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const models = manufacturerModels
       .filter((m) => m.manufacturer.toUpperCase() === cleanMfg && m.model)
       .map((m) => m.model.toUpperCase());
-    return Array.from(new Set(models)).sort();
+    return Array.from(new Set<string>(models)).sort();
   };
 
   // Scoped lists: If admin, show all; if regular engineer, show only assigned items
