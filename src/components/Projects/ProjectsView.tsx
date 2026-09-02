@@ -643,7 +643,7 @@ export const ProjectsView: React.FC = () => {
                       >
                         <div>
                           <div className="font-bold text-slate-900">{d.details}</div>
-                          {d.documentLink && (
+                          {isAdmin && d.documentLink && (
                             <a
                               href={d.documentLink}
                               target="_blank"
@@ -1017,15 +1017,17 @@ export const ProjectsView: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">GOOGLE DRIVE LINK</label>
-                <input
-                  type="text"
-                  value={docLink}
-                  onChange={(e) => setDocLink(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono"
-                />
-              </div>
+              {isAdmin && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">GOOGLE DRIVE LINK</label>
+                  <input
+                    type="text"
+                    value={docLink}
+                    onChange={(e) => setDocLink(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono"
+                  />
+                </div>
+              )}
 
               <div className="flex justify-end space-x-2 pt-2">
                 <button

@@ -497,30 +497,38 @@ export const MyDeskView: React.FC = () => {
       {/* COMPACT FILTER & STATUS BAR */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 sm:p-3.5 shadow-2xs space-y-2.5 transition-colors">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="flex items-center space-x-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
-              Filter by Engineer:
-            </span>
-            <select
-              value={adminEngineerFilter}
-              onChange={(e) => setAdminEngineerFilter(e.target.value)}
-              className="px-3 py-1.5 text-xs sm:text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold focus:outline-hidden focus:ring-1 focus:ring-teal-500 min-h-[38px]"
-            >
-              <option value="ALL">⭐ ALL ENGINEERS ({cases.length})</option>
-              {users.map((u) => {
-                const count = cases.filter(
-                  (c) =>
-                    c.assignedEngineerName?.trim().toUpperCase() === u.name.trim().toUpperCase() ||
-                    c.assignedEngineerId?.toLowerCase() === u.id.toLowerCase()
-                ).length;
-                return (
-                  <option key={u.id} value={u.name}>
-                    Eng. {u.name} ({count})
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+          {isAdmin ? (
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                Filter by Engineer:
+              </span>
+              <select
+                value={adminEngineerFilter}
+                onChange={(e) => setAdminEngineerFilter(e.target.value)}
+                className="px-3 py-1.5 text-xs sm:text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold focus:outline-hidden focus:ring-1 focus:ring-teal-500 min-h-[38px]"
+              >
+                <option value="ALL">⭐ ALL ENGINEERS ({cases.length})</option>
+                {users.map((u) => {
+                  const count = cases.filter(
+                    (c) =>
+                      c.assignedEngineerName?.trim().toUpperCase() === u.name.trim().toUpperCase() ||
+                      c.assignedEngineerId?.toLowerCase() === u.id.toLowerCase()
+                  ).length;
+                  return (
+                    <option key={u.id} value={u.name}>
+                      Eng. {u.name} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold text-teal-800 dark:text-teal-200 bg-teal-50 dark:bg-teal-950/70 border border-teal-300 dark:border-teal-700 px-3 py-1.5 rounded-lg">
+                My Assigned Calls (Eng. {currentUser?.name})
+              </span>
+            </div>
+          )}
 
           <div className="text-xs text-slate-600 dark:text-slate-300 font-semibold flex items-center space-x-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
             <span className="text-slate-400">Total Filtered:</span>
@@ -934,7 +942,7 @@ export const MyDeskView: React.FC = () => {
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>{actionSuccessMsg}</span>
                 </div>
-                {lastDoneLog && docMethod === 'DIGITAL_REPORT' && (
+                {isAdmin && lastDoneLog && docMethod === 'DIGITAL_REPORT' && (
                   <button
                     type="button"
                     onClick={() => generateDoneWorkPdf(lastDoneLog)}
@@ -1288,18 +1296,20 @@ export const MyDeskView: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Google Drive Target Folder */}
-                      <div className="p-2.5 bg-emerald-100/70 rounded-lg border border-emerald-300 flex items-center justify-between text-xs">
-                        <div className="flex items-center space-x-2">
-                          <HardDrive className="w-4 h-4 text-emerald-800 shrink-0" />
-                          <span className="text-emerald-950 font-medium">
-                            Drive Target: <strong className="font-mono">{manualSerialNumber || 'S/N'}_Service_Report.pdf</strong>
+                      {/* Google Drive Target Folder - Admin Only */}
+                      {isAdmin && (
+                        <div className="p-2.5 bg-emerald-100/70 rounded-lg border border-emerald-300 flex items-center justify-between text-xs">
+                          <div className="flex items-center space-x-2">
+                            <HardDrive className="w-4 h-4 text-emerald-800 shrink-0" />
+                            <span className="text-emerald-950 font-medium">
+                              Drive Target: <strong className="font-mono">{manualSerialNumber || 'S/N'}_Service_Report.pdf</strong>
+                            </span>
+                          </div>
+                          <span className="text-emerald-800 font-bold text-[11px] bg-emerald-200/70 px-2 py-0.5 rounded">
+                            {manualUploadedItem ? 'Ready to Complete' : 'Auto-Sync Active'}
                           </span>
                         </div>
-                        <span className="text-emerald-800 font-bold text-[11px] bg-emerald-200/70 px-2 py-0.5 rounded">
-                          {manualUploadedItem ? 'Ready to Complete' : 'Auto-Sync Active'}
-                        </span>
-                      </div>
+                      )}
                     </div>
                   )}
 
@@ -1582,8 +1592,8 @@ export const MyDeskView: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Google Drive Link for attached doc */}
-                      {attachedDocItem?.driveLink && (
+                      {/* Google Drive Link for attached doc - Admin Only */}
+                      {isAdmin && attachedDocItem?.driveLink && (
                         <div className="p-2.5 bg-indigo-100/70 rounded-lg border border-indigo-300 flex items-center justify-between text-xs">
                           <div className="flex items-center space-x-2">
                             <HardDrive className="w-4 h-4 text-indigo-800 shrink-0" />

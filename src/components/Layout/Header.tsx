@@ -249,8 +249,8 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* Sheets Sync Alert Banner */}
-        {sheetsSyncStatus && (
+        {/* Sheets Sync Alert Banner - Admin Only */}
+        {isAdmin && sheetsSyncStatus && (
           <div className="bg-orange-950/90 text-orange-100 px-3 py-1 text-[11px] text-center border-t border-orange-700 flex items-center justify-center space-x-2">
             <RefreshCw className={`w-3 h-3 text-[#4CAF50] ${isSyncingSheets ? 'animate-spin' : ''}`} />
             <span>{sheetsSyncStatus}</span>

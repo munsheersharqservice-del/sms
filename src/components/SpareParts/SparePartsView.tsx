@@ -16,7 +16,7 @@ import {
 import { Department, SparePartItem } from '../../types';
 
 export const SparePartsView: React.FC = () => {
-  const { spareParts, addSparePart, updateSparePart, consumeSparePart } = useApp();
+  const { spareParts, addSparePart, updateSparePart, consumeSparePart, isAdmin } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
@@ -197,14 +197,16 @@ export const SparePartsView: React.FC = () => {
                       </h3>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(part)}
-                      className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-md transition-colors"
-                      title="Edit Spare Part"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(part)}
+                        className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-md transition-colors"
+                        title="Edit Spare Part"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
 
                   <div className="space-y-1 pt-2 text-xs text-slate-600">

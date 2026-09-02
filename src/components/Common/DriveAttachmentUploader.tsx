@@ -38,7 +38,7 @@ export const DriveAttachmentUploader: React.FC<DriveAttachmentUploaderProps> = (
   caseNumber,
   maxFiles = 5,
 }) => {
-  const { isGoogleConnected, googleUser, connectGoogle } = useApp();
+  const { isGoogleConnected, googleUser, connectGoogle, isAdmin } = useApp();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgressMsg, setUploadProgressMsg] = useState<string | null>(null);
   const [syncingItemId, setSyncingItemId] = useState<string | null>(null);
@@ -145,23 +145,25 @@ export const DriveAttachmentUploader: React.FC<DriveAttachmentUploaderProps> = (
           <span>{label}</span>
         </label>
 
-        <div className="flex items-center space-x-2">
-          {isGoogleConnected ? (
-            <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md flex items-center space-x-1">
-              <CheckCircle2 className="w-3 h-3 text-[#39B54A]" />
-              <span className="truncate max-w-[140px]">{googleUser?.email || 'Google Connected'}</span>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={connectGoogle}
-              className="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-md flex items-center space-x-1.5 transition-colors cursor-pointer"
-            >
-              <Cloud className="w-3.5 h-3.5 text-blue-600" />
-              <span>Connect Drive Sync</span>
-            </button>
-          )}
-        </div>
+        {isAdmin && (
+          <div className="flex items-center space-x-2">
+            {isGoogleConnected ? (
+              <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md flex items-center space-x-1">
+                <CheckCircle2 className="w-3 h-3 text-[#39B54A]" />
+                <span className="truncate max-w-[140px]">{googleUser?.email || 'Google Connected'}</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={connectGoogle}
+                className="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-md flex items-center space-x-1.5 transition-colors cursor-pointer"
+              >
+                <Cloud className="w-3.5 h-3.5 text-blue-600" />
+                <span>Connect Drive Sync</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Upload Dropzone */}
@@ -288,8 +290,8 @@ export const DriveAttachmentUploader: React.FC<DriveAttachmentUploaderProps> = (
                     <span>View</span>
                   </button>
 
-                  {/* Upload to Drive Button if not synced */}
-                  {!isSynced && (
+                  {/* Upload to Drive Button if not synced - Admin Only */}
+                  {isAdmin && !isSynced && (
                     <button
                       type="button"
                       onClick={() => handleSyncToDrive(att)}

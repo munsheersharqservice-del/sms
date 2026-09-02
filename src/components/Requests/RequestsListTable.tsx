@@ -447,19 +447,21 @@ export const RequestsListTable: React.FC<RequestsListTableProps> = ({
                             <option value="Rejected">Rejected</option>
                           </select>
 
-                          {/* Delete */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (confirm(`Delete request ${req.requestNumber}?`)) {
-                                deleteRequest(req.id);
-                              }
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                            title="Delete Request"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Delete - Admin Only */}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Delete request ${req.requestNumber}?`)) {
+                                  deleteRequest(req.id);
+                                }
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                              title="Delete Request"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

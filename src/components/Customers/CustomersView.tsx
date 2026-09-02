@@ -28,6 +28,7 @@ export const CustomersView: React.FC = () => {
     setAssetSearchQuery,
     setAssetSubTab,
     setActiveTab,
+    isAdmin,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -254,24 +255,26 @@ export const CustomersView: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="flex items-center space-x-1">
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(cust)}
-                        className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-md transition-colors"
-                        title="Edit Customer Details"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(cust.id, cust.name)}
-                        className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-md transition-colors"
-                        title="Delete Customer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {isAdmin && (
+                      <div className="flex items-center space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(cust)}
+                          className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-md transition-colors"
+                          title="Edit Customer Details"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(cust.id, cust.name)}
+                          className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-md transition-colors"
+                          title="Delete Customer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-1.5 pt-3 text-xs text-slate-600">

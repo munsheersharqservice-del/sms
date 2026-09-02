@@ -91,6 +91,7 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
     googleUser,
     currentSpreadsheetUrl,
     exportToGoogleSheets,
+    isAdmin,
   } = useApp();
 
   const [isExportingSheets, setIsExportingSheets] = useState(false);
@@ -862,58 +863,60 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                 <option value="MELAG VACUKLAV 41 B+" />
               </datalist>
 
-              {/* Live Google Sheet Status / Sync Banner */}
-              <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-                isGoogleConnected
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
-                  : 'bg-amber-50 border-amber-200 text-amber-950'
-              }`}>
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${isGoogleConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                  <div>
-                    <div className="font-bold flex items-center gap-1.5">
-                      <span>{isGoogleConnected ? 'Live 2-Way Google Sheet Sync Active' : 'Offline / Local Registration'}</span>
-                      {googleUser?.email && (
-                        <span className="text-[10px] text-slate-500 font-normal">({googleUser.email})</span>
-                      )}
-                    </div>
-                    <div className="text-[10px] text-slate-600">
-                      {isGoogleConnected
-                        ? 'New equipment will write immediately to the "Equipment" tab.'
-                        : 'Connect your Google account to write new assets live to the master sheet.'}
+              {/* Live Google Sheet Status / Sync Banner - Admin Only */}
+              {isAdmin && (
+                <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                  isGoogleConnected
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                    : 'bg-amber-50 border-amber-200 text-amber-950'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${isGoogleConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                    <div>
+                      <div className="font-bold flex items-center gap-1.5">
+                        <span>{isGoogleConnected ? 'Live 2-Way Google Sheet Sync Active' : 'Offline / Local Registration'}</span>
+                        {googleUser?.email && (
+                          <span className="text-[10px] text-slate-500 font-normal">({googleUser.email})</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-600">
+                        {isGoogleConnected
+                          ? 'New equipment will write immediately to the "Equipment" tab.'
+                          : 'Connect your Google account to write new assets live to the master sheet.'}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {!isGoogleConnected ? (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          await connectGoogle();
-                        } catch (e: any) {
-                          console.warn('Connect error:', e);
-                        }
-                      }}
-                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                    >
-                      <UploadCloud className="w-3 h-3" />
-                      <span>Connect Google</span>
-                    </button>
-                  ) : (
-                    <a
-                      href={currentSpreadsheetUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[10px] flex items-center gap-1"
-                    >
-                      <span>Open Sheet</span>
-                      <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {!isGoogleConnected ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await connectGoogle();
+                          } catch (e: any) {
+                            console.warn('Connect error:', e);
+                          }
+                        }}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                      >
+                        <UploadCloud className="w-3 h-3" />
+                        <span>Connect Google</span>
+                      </button>
+                    ) : (
+                      <a
+                        href={currentSpreadsheetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[10px] flex items-center gap-1"
+                      >
+                        <span>Open Sheet</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Row 1: Serial Number, Hospital Asset/HBE #, Model */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1432,18 +1435,20 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-extrabold text-slate-800 uppercase mb-1">
-                    Google Drive Report Link
-                  </label>
-                  <input
-                    type="text"
-                    value={assetReportLink}
-                    onChange={(e) => setAssetReportLink(e.target.value)}
-                    placeholder="https://drive.google.com/..."
-                    className="w-full px-3 py-2 text-xs bg-white text-black font-mono font-semibold border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:bg-white focus:text-black focus:outline-hidden placeholder:text-slate-400"
-                  />
-                </div>
+                {isAdmin && (
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-slate-800 uppercase mb-1">
+                      Google Drive Report Link
+                    </label>
+                    <input
+                      type="text"
+                      value={assetReportLink}
+                      onChange={(e) => setAssetReportLink(e.target.value)}
+                      placeholder="https://drive.google.com/..."
+                      className="w-full px-3 py-2 text-xs bg-white text-black font-mono font-semibold border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:bg-white focus:text-black focus:outline-hidden placeholder:text-slate-400"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* REAL ATTACHED FILE TO DATABASE FOR ASSET */}

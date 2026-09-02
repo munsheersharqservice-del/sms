@@ -471,7 +471,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return null;
   });
 
-  const isAdmin = true;
+  const isAdmin = Boolean(
+    currentUser && (currentUser.role === 'Admin' || currentUser.name.trim().toUpperCase() === 'ADMIN')
+  );
 
   // Real Mode Storage Initializer: Auto-purge legacy mock data if on older version
   useEffect(() => {
@@ -723,8 +725,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const currentId = currentUser.id?.trim().toLowerCase();
     return cases.filter((c) => {
       const matchId = Boolean(c.assignedEngineerId && c.assignedEngineerId.toLowerCase() === currentId);
-      const matchName = Boolean(c.assignedEngineerName && c.assignedEngineerName.trim().toUpperCase() === currentName);
-      return matchId || matchName;
+      const assignedUpper = (c.assignedEngineerName || '').trim().toUpperCase();
+      const matchName = Boolean(currentName && assignedUpper === currentName);
+      const matchPartial = Boolean(
+        currentName && assignedUpper &&
+        (assignedUpper.includes(currentName) || currentName.includes(assignedUpper))
+      );
+      return matchId || matchName || matchPartial;
     });
   }, [cases, currentUser, isAdmin]);
 

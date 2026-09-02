@@ -14,6 +14,7 @@ import {
   File,
 } from 'lucide-react';
 import { AttachmentItem } from '../../types';
+import { useApp } from '../../context/AppContext';
 
 interface AttachmentViewerModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
   title = 'Case Attachment',
   caseTicket,
 }) => {
+  const { isAdmin } = useApp();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -139,7 +141,7 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
               </>
             )}
 
-            {(currentAttachment.dataUrl || currentAttachment.driveLink) && (
+            {isAdmin && (currentAttachment.dataUrl || currentAttachment.driveLink) && (
               <button
                 type="button"
                 onClick={handleDownload}
@@ -213,7 +215,7 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
                   title={currentAttachment.name}
                   className="w-full h-full rounded-lg border border-slate-700 bg-white"
                 />
-              ) : (
+              ) : isAdmin ? (
                 <button
                   type="button"
                   onClick={handleDownload}
@@ -222,7 +224,7 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
                   <Download className="w-4 h-4" />
                   <span>Download / View PDF</span>
                 </button>
-              )}
+              ) : null}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center p-8 space-y-3 text-center">
@@ -231,14 +233,16 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
               <p className="text-xs text-slate-400">
                 {currentAttachment.mimeType || 'Document file'}
               </p>
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-lg flex items-center space-x-2 transition-colors cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Attachment</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-lg flex items-center space-x-2 transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Attachment</span>
+                </button>
+              )}
             </div>
           )}
         </div>

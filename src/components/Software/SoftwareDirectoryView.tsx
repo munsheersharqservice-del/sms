@@ -32,7 +32,7 @@ export const SoftwareDirectoryView: React.FC<SoftwareDirectoryViewProps> = ({
   onRegisterNew,
   onEdit,
 }) => {
-  const { softwareLicenses, deleteSoftwareLicense } = useApp();
+  const { softwareLicenses, deleteSoftwareLicense, isAdmin } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -243,7 +243,7 @@ export const SoftwareDirectoryView: React.FC<SoftwareDirectoryViewProps> = ({
 
                           {hasAttachment && (
                             <div className="flex items-center gap-1.5">
-                              {attUrl ? (
+                              {isAdmin && attUrl ? (
                                 <a
                                   href={attUrl}
                                   download={attName || 'software-license-file'}
@@ -267,26 +267,30 @@ export const SoftwareDirectoryView: React.FC<SoftwareDirectoryViewProps> = ({
 
                       {/* Actions */}
                       <td className="p-4 whitespace-nowrap text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {onEdit && (
+                        {isAdmin ? (
+                          <div className="flex items-center justify-end gap-1">
+                            {onEdit && (
+                              <button
+                                type="button"
+                                onClick={() => onEdit(lic)}
+                                className="p-1.5 hover:bg-indigo-50 text-slate-500 hover:text-indigo-700 rounded-lg transition-colors"
+                                title="Edit License"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() => onEdit(lic)}
-                              className="p-1.5 hover:bg-indigo-50 text-slate-500 hover:text-indigo-700 rounded-lg transition-colors"
-                              title="Edit License"
+                              onClick={() => handleDelete(lic.id, `${lic.model} (${lic.customerName})`)}
+                              className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                              title="Delete License"
                             >
-                              <Edit2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(lic.id, `${lic.model} (${lic.customerName})`)}
-                            className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
-                            title="Delete License"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">—</span>
+                        )}
                       </td>
                     </tr>
                   );

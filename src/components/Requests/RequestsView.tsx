@@ -25,6 +25,7 @@ export const RequestsView: React.FC = () => {
     refreshFromGoogleSheets,
     isSyncingSheets,
     sheetsSyncStatus,
+    isAdmin,
   } = useApp();
 
   const [activeSubTab, setActiveSubTab] = useState<'new' | 'all' | 'docs'>('all');
@@ -76,24 +77,26 @@ export const RequestsView: React.FC = () => {
             </div>
           </div>
 
-          {/* Sync Trigger */}
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            {sheetsSyncStatus && (
-              <span className="text-[11px] font-mono text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 hidden md:inline-block truncate max-w-xs">
-                {sheetsSyncStatus}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => refreshFromGoogleSheets()}
-              disabled={isSyncingSheets}
-              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
-              title="Fetch live updates from Google Sheets"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin text-orange-500' : 'text-slate-500'}`} />
-              <span>{isSyncingSheets ? 'Syncing...' : 'Sync Sheet'}</span>
-            </button>
-          </div>
+          {/* Sync Trigger - Admin Only */}
+          {isAdmin && (
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              {sheetsSyncStatus && (
+                <span className="text-[11px] font-mono text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 hidden md:inline-block truncate max-w-xs">
+                  {sheetsSyncStatus}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => refreshFromGoogleSheets()}
+                disabled={isSyncingSheets}
+                className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
+                title="Fetch live updates from Google Sheets"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin text-orange-500' : 'text-slate-500'}`} />
+                <span>{isSyncingSheets ? 'Syncing...' : 'Sync Sheet'}</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Sub Navigation Bar */}

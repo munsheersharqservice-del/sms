@@ -79,24 +79,11 @@ export const NewCaseView: React.FC = () => {
   const [showAssetDropdown, setShowAssetDropdown] = useState(false);
   const assetDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Form Fields
-  const [engineerName, setEngineerName] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem('sharq_last_selected_engineer');
-      if (saved) return saved;
-    } catch (e) {
-      // ignore
-    }
-    return currentUser?.name?.toUpperCase() || (users[0]?.name?.toUpperCase() ?? 'ADMIN');
-  });
+  // Form Fields - Engineer kept empty initially and mandatory
+  const [engineerName, setEngineerName] = useState<string>('');
 
   const handleEngineerChange = (name: string) => {
     setEngineerName(name);
-    try {
-      localStorage.setItem('sharq_last_selected_engineer', name);
-    } catch (e) {
-      // ignore
-    }
   };
 
   const [coverage, setCoverage] = useState<WarrantyStatus>('Warranty');
@@ -296,6 +283,11 @@ export const NewCaseView: React.FC = () => {
       return;
     }
 
+    if (!engineerName.trim()) {
+      alert('Please choose an assigned Field Engineer. Engineer selection is mandatory.');
+      return;
+    }
+
     if (!issueReported.trim()) {
       alert('Please enter Issue / Assignment Context.');
       return;
@@ -367,23 +359,25 @@ export const NewCaseView: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 self-start sm:self-auto">
-          {isGoogleConnected ? (
-            <span className="inline-flex items-center space-x-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs">
-              <CheckCircle2 className="w-4 h-4 text-[#4CAF50]" />
-              <span>Google Drive Connected</span>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={connectGoogle}
-              className="inline-flex items-center space-x-1.5 bg-blue-950/80 hover:bg-blue-900 text-blue-200 border border-blue-500/50 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs min-h-[44px]"
-            >
-              <Cloud className="w-4 h-4 text-blue-400" />
-              <span>Connect Google Drive</span>
-            </button>
-          )}
-        </div>
+        {isAdmin && (
+          <div className="flex items-center space-x-2 self-start sm:self-auto">
+            {isGoogleConnected ? (
+              <span className="inline-flex items-center space-x-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs">
+                <CheckCircle2 className="w-4 h-4 text-[#4CAF50]" />
+                <span>Google Drive Connected</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={connectGoogle}
+                className="inline-flex items-center space-x-1.5 bg-blue-950/80 hover:bg-blue-900 text-blue-200 border border-blue-500/50 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs min-h-[44px]"
+              >
+                <Cloud className="w-4 h-4 text-blue-400" />
+                <span>Connect Google Drive</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {submittedMessage && (
@@ -778,7 +772,7 @@ export const NewCaseView: React.FC = () => {
                 {/* Engineer */}
                 <div>
                   <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2">
-                    Engineer
+                    Engineer <span className="text-red-500 font-bold">* (Mandatory)</span>
                   </label>
                   <select
                     id="call-engineer"
@@ -787,6 +781,7 @@ export const NewCaseView: React.FC = () => {
                     className="w-full bg-white text-black border border-slate-300 p-3 rounded-lg text-sm font-bold focus:border-emerald-500 outline-none cursor-pointer"
                     required
                   >
+                    <option value="">-- Choose Field Engineer (Mandatory) --</option>
                     {engineerOptions.map((eng) => (
                       <option key={eng} value={eng}>
                         {eng}
