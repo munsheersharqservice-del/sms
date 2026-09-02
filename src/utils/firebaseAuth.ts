@@ -2,8 +2,16 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-export const auth = getAuth(app);
+let app: any = null;
+try {
+  if (firebaseConfig && (firebaseConfig as any).apiKey) {
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  }
+} catch (err) {
+  console.warn('Firebase initialization warning:', err);
+}
+
+export const auth = app ? getAuth(app) : (null as any);
 
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/spreadsheets');
@@ -43,6 +51,10 @@ export const initAuth = (
   onAuthSuccess?: (user: User, token: string) => void,
   onAuthFailure?: () => void
 ) => {
+  if (!auth) {
+    if (onAuthFailure) onAuthFailure();
+    return () => {};
+  }
   return onAuthStateChanged(auth, async (user: User | null) => {
     cachedUser = user;
     if (user) {
@@ -65,6 +77,9 @@ export const initAuth = (
 };
 
 export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
+  if (!auth) {
+    throw new Error('Firebase Auth is not configured. Please use Google Apps Script Webhook or configure Firebase.');
+  }
   try {
     isSigningIn = true;
     const result = await signInWithPopup(auth, provider);
@@ -100,11 +115,13 @@ export const getAccessToken = async (): Promise<string | null> => {
 };
 
 export const getCurrentGoogleUser = (): User | null => {
-  return cachedUser || auth.currentUser;
+  return cachedUser || (auth ? auth.currentUser : null);
 };
 
 export const googleSignOut = async () => {
-  await auth.signOut();
+  if (auth) {
+    await auth.signOut();
+  }
   cachedAccessToken = null;
   cachedUser = null;
   if (typeof window !== 'undefined') {
