@@ -242,7 +242,7 @@ export const ProjectsView: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h2 className="text-lg font-bold tracking-tight text-white uppercase">
+              <h2 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
                 {isAdmin ? 'PROJECT FOLLOW-UP & TURNKEY INSTALLATIONS' : 'MY ASSIGNED PROJECTS & INSTALLATIONS'}
               </h2>
               <span
@@ -255,11 +255,6 @@ export const ProjectsView: React.FC = () => {
                 {isAdmin ? 'SYSTEM ADMINISTRATOR' : `ENG. ${currentUser?.name || ''}`}
               </span>
             </div>
-            <p className="text-xs text-slate-300">
-              {isAdmin
-                ? 'Master oversight • Track site visits, readiness stages, installation milestones & handover sign-offs'
-                : 'Your assigned project sites, technical visits, installation milestones & documents'}
-            </p>
           </div>
         </div>
 

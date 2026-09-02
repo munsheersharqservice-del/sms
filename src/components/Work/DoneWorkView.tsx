@@ -176,16 +176,13 @@ export const DoneWorkView: React.FC = () => {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black tracking-tight text-white uppercase">
+              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
                 COMPLETED WORK LOGS & SERVICE REPORTS
               </h1>
               <span className="bg-[#4CAF50] text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
                 {baseLogs.length} Completed Logs
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
-              Historical archive of completed service cases, digital sign-offs, parts replaced, and customer service reports.
-            </p>
           </div>
         </div>
 

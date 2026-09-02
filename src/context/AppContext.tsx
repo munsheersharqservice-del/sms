@@ -456,9 +456,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return sanitizeUserList(INITIAL_USERS);
   });
 
-  // Current logged in engineer / user (Strictly Administrator)
+  // Current logged in engineer / user - Starts as null so Login Page appears first
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    return INITIAL_USERS[0];
+    try {
+      const remember = localStorage.getItem('sharq_remember_login');
+      if (remember) {
+        const savedUser = localStorage.getItem('sharq_v3_current_user');
+        if (savedUser) {
+          const parsed = JSON.parse(savedUser);
+          if (parsed && parsed.name) return parsed;
+        }
+      }
+    } catch {}
+    return null;
   });
 
   const isAdmin = true;
@@ -638,7 +648,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [users]);
 
   useEffect(() => {
-    localStorage.setItem('sharq_v3_current_user', JSON.stringify(currentUser));
+    if (currentUser) {
+      sessionStorage.setItem('sharq_active_session_user', JSON.stringify(currentUser));
+      if (localStorage.getItem('sharq_remember_login')) {
+        localStorage.setItem('sharq_v3_current_user', JSON.stringify(currentUser));
+      }
+    } else {
+      sessionStorage.removeItem('sharq_active_session_user');
+      localStorage.removeItem('sharq_v3_current_user');
+    }
   }, [currentUser]);
 
   useEffect(() => {
@@ -883,6 +901,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('sharq_remember_login');
+    localStorage.removeItem('sharq_v3_current_user');
+    sessionStorage.removeItem('sharq_active_session_user');
   };
 
   // Customer actions

@@ -127,12 +127,9 @@ export const SparePartsView: React.FC = () => {
             <Package className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-white uppercase">
+            <h2 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
               SPARE PARTS & CONSUMABLES INVENTORY
             </h2>
-            <p className="text-xs text-slate-300">
-              Manage KaVo dental valves, turbines, sensors, electronic boards, and biomedical components
-            </p>
           </div>
         </div>
 

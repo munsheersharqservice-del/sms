@@ -134,12 +134,9 @@ export const CustomersView: React.FC = () => {
             <Building2 className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-white uppercase">
+            <h2 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
               CUSTOMER MASTER DATABASE
             </h2>
-            <p className="text-xs text-slate-300">
-              Centralized registry of hospitals, dental centers, clinics, and biomedical facilities in Qatar
-            </p>
           </div>
         </div>
 

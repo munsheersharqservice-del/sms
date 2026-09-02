@@ -357,16 +357,13 @@ export const NewCaseView: React.FC = () => {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black tracking-tight text-white uppercase">
+              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
                 NEW SERVICE CALL DISPATCH
               </h1>
               <span className="bg-[#4CAF50] text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
                 Ticket #{activeTicketNumber}
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
-              Dispatch new tickets, auto-link customer machines by serial number, and synchronize directly with Google Sheets.
-            </p>
           </div>
         </div>
 

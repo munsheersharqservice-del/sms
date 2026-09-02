@@ -61,7 +61,7 @@ export const RequestsView: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 uppercase">
+                <h1 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 uppercase">
                   Requisitions & Logistics
                 </h1>
                 <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono">
@@ -73,9 +73,6 @@ export const RequestsView: React.FC = () => {
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-500 font-medium hidden xs:block">
-                Spare parts dispatch, delivery coordination & document issuance
-              </p>
             </div>
           </div>
 

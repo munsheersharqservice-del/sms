@@ -262,16 +262,13 @@ export const PpmDueView: React.FC = () => {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black tracking-tight text-white uppercase">
+              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
                 PPM DUE SCHEDULE & MAINTENANCE TRACKER
               </h1>
               <span className="bg-orange-500 text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs animate-pulse">
                 {currentMonthName} Focus
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
-              Monitor Planned Preventive Maintenance across <strong>Government</strong> & <strong>Private</strong> healthcare accounts in Qatar with automatic 3-month, 6-month, and 1-year cycle calculations.
-            </p>
           </div>
         </div>
 

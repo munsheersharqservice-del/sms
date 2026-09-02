@@ -272,16 +272,13 @@ export const AssetsView: React.FC = () => {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black tracking-tight text-white uppercase">
+              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
                 EQUIPMENT & ASSET DIRECTORY
               </h1>
               <span className="bg-indigo-600 text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
                 {assets.length} Active Systems
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
-              Centralized registry of biomedical machines, dental units, software licenses & warranty lifecycles.
-            </p>
           </div>
         </div>
 
