@@ -199,19 +199,9 @@ export const MobileNavBar: React.FC = () => {
             {isAdmin && (
               <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Admin Cloud & Links
+                  Spreadsheet & Reports
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <a
-                    href={SHARQ_GOOGLE_DRIVE_FOLDER_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center space-x-1.5 p-2 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded-lg text-blue-700 dark:text-blue-300 text-xs font-semibold transition-colors"
-                  >
-                    <FolderSync className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                    <span className="truncate">Google Drive</span>
-                  </a>
-
+                <div className="grid grid-cols-1 gap-2">
                   <a
                     href={currentSpreadsheetUrl || DEFAULT_SPREADSHEET_URL}
                     target="_blank"

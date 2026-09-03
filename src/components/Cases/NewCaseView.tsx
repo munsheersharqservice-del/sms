@@ -305,7 +305,7 @@ export const NewCaseView: React.FC = () => {
       contactPersonName: contactPerson.trim() || undefined,
       contactPersonPhone: contactPhone.trim() || undefined,
       attachments,
-      serviceReportDriveLink: attachments.length > 0 && attachments[0].driveLink ? attachments[0].driveLink : SHARQ_GOOGLE_DRIVE_FOLDER_URL,
+      serviceReportDriveLink: attachments.length > 0 && attachments[0].driveLink ? attachments[0].driveLink : '',
       status: 'New',
       priority: 'High',
     });

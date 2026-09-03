@@ -58,6 +58,27 @@ export const STANDARD_MANUFACTURERS = [
   'GE HEALTHCARE',
 ];
 
+export const computeWarrantyExpiry = (installDate: string, years: number): string => {
+  if (!installDate || years <= 0) return '';
+  try {
+    const parts = installDate.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parts[1];
+      const day = parts[2];
+      if (!isNaN(year)) {
+        return `${year + years}-${month}-${day}`;
+      }
+    }
+    const d = new Date(installDate);
+    if (isNaN(d.getTime())) return '';
+    d.setFullYear(d.getFullYear() + years);
+    return d.toISOString().split('T')[0];
+  } catch {
+    return '';
+  }
+};
+
 interface AssetSoftwareSideDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -137,6 +158,7 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
   const [assetRoom, setAssetRoom] = useState('');
   const [assetDept, setAssetDept] = useState<Department>('Dental');
   const [assetInstallDate, setAssetInstallDate] = useState('');
+  const [assetWarrantyYears, setAssetWarrantyYears] = useState<number>(1);
   const [assetWarrantyExpiry, setAssetWarrantyExpiry] = useState('');
   const [assetPpmFrequency, setAssetPpmFrequency] = useState<PpmFrequency>('None');
   const [assetPpmType, setAssetPpmType] = useState<PpmType>('Yearly Maintenance');
@@ -147,6 +169,11 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
   const [assetReportLink, setAssetReportLink] = useState('');
   const [assetAccessoriesText, setAssetAccessoriesText] = useState('');
   const [assetPartsText, setAssetPartsText] = useState('');
+  const [assetParts, setAssetParts] = useState<{ name: string; serialNumber: string }[]>([
+    { name: '', serialNumber: '' },
+    { name: '', serialNumber: '' },
+    { name: '', serialNumber: '' },
+  ]);
 
   // Asset File Attachment State
   const [assetAttachmentName, setAssetAttachmentName] = useState('');
@@ -214,7 +241,26 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
           setAssetRoom(prefilledAsset.roomNumber || '');
           setAssetDept(prefilledAsset.department || 'Dental');
           setAssetInstallDate(prefilledAsset.installationDate || '');
-          setAssetWarrantyExpiry(prefilledAsset.warrantyExpiry || '');
+          
+          let initYears = 1;
+          if (prefilledAsset.warrantyDuration) {
+            const match = prefilledAsset.warrantyDuration.match(/\d+/);
+            if (match) initYears = Math.min(10, Math.max(0, parseInt(match[0], 10)));
+          } else if (prefilledAsset.installationDate && prefilledAsset.warrantyExpiry) {
+            try {
+              const iy = new Date(prefilledAsset.installationDate).getFullYear();
+              const ey = new Date(prefilledAsset.warrantyExpiry).getFullYear();
+              if (!isNaN(iy) && !isNaN(ey) && ey >= iy) {
+                initYears = Math.min(10, Math.max(0, ey - iy));
+              }
+            } catch {}
+          }
+          setAssetWarrantyYears(initYears);
+          setAssetWarrantyExpiry(
+            prefilledAsset.warrantyExpiry ||
+              computeWarrantyExpiry(prefilledAsset.installationDate || '', initYears)
+          );
+
           setAssetPpmFrequency(prefilledAsset.ppmFrequency || 'None');
           setAssetPpmType(prefilledAsset.ppmType || 'Yearly Maintenance');
           setAssetLastPpmDate(prefilledAsset.lastPpmDate || '');
@@ -228,6 +274,22 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
           setAssetPartsText(
             prefilledAsset.partsApplicable?.map((p) => `${p.partName}: ${p.partSerialNumber}`).join(', ') || ''
           );
+
+          const loadedParts = [
+            { name: '', serialNumber: '' },
+            { name: '', serialNumber: '' },
+            { name: '', serialNumber: '' },
+          ];
+          if (prefilledAsset.partsApplicable && prefilledAsset.partsApplicable.length > 0) {
+            prefilledAsset.partsApplicable.slice(0, 3).forEach((p, idx) => {
+              loadedParts[idx] = {
+                name: p.partName || '',
+                serialNumber: p.partSerialNumber || '',
+              };
+            });
+          }
+          setAssetParts(loadedParts);
+
           setAssetAttachmentName(prefilledAsset.attachmentName || prefilledAsset.attachments?.[0]?.name || '');
           setAssetAttachmentDataUrl(prefilledAsset.attachmentDataUrl || prefilledAsset.attachments?.[0]?.dataUrl || '');
           setAssetAttachmentSize(prefilledAsset.attachments?.[0]?.size || 0);
@@ -246,6 +308,7 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
           setAssetRoom('');
           setAssetDept('Dental');
           setAssetInstallDate('');
+          setAssetWarrantyYears(1);
           setAssetWarrantyExpiry('');
           setAssetPpmFrequency('None');
           setAssetLastPpmDate('');
@@ -255,6 +318,11 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
           setAssetReportLink('');
           setAssetAccessoriesText('');
           setAssetPartsText('');
+          setAssetParts([
+            { name: '', serialNumber: '' },
+            { name: '', serialNumber: '' },
+            { name: '', serialNumber: '' },
+          ]);
           setAssetAttachmentName('');
           setAssetAttachmentDataUrl('');
           setAssetAttachmentSize(0);
@@ -460,6 +528,12 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
         ? calculateNextPpmDate(assetLastPpmDate || assetInstallDate, assetPpmFrequency)
         : undefined);
 
+    const effectiveWarrantyExpiry =
+      assetWarrantyExpiry ||
+      (assetInstallDate && assetWarrantyYears > 0
+        ? computeWarrantyExpiry(assetInstallDate, assetWarrantyYears)
+        : undefined);
+
     const parsedAccessories: AccessoryItem[] = assetAccessoriesText
       .split(',')
       .map((item, idx) => ({
@@ -469,14 +543,13 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
       }))
       .filter((a) => a.name.length > 0);
 
-    const parsedParts = assetPartsText
-      .split(',')
-      .map((item, idx) => ({
+    const savedParts = assetParts
+      .filter((p) => (p.name && p.name.trim()) || (p.serialNumber && p.serialNumber.trim()))
+      .map((p, idx) => ({
         id: `part-${Date.now()}-${idx}`,
-        partName: item.trim(),
-        partSerialNumber: `PART-SN-${idx + 1}`,
-      }))
-      .filter((p) => p.partName.length > 0);
+        partName: p.name.trim(),
+        partSerialNumber: p.serialNumber.trim().toUpperCase(),
+      }));
 
     const assetAttachments: AttachmentItem[] = assetAttachmentName && assetAttachmentDataUrl
       ? [
@@ -503,19 +576,19 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
         roomNumber: assetRoom.trim().toUpperCase(),
         department: assetDept,
         installationDate: assetInstallDate || undefined,
-        warrantyExpiry: assetWarrantyExpiry || undefined,
+        warrantyDuration: `${assetWarrantyYears} ${assetWarrantyYears === 1 ? 'Year' : 'Years'}`,
+        warrantyExpiry: effectiveWarrantyExpiry,
         ppmFrequency: assetPpmFrequency,
         ppmType: assetPpmFrequency !== 'None' ? assetPpmType : undefined,
         lastPpmDate: assetLastPpmDate || undefined,
         nextPpmDate: calculatedNextPpm,
         invoiceNo: assetInvoiceNo.trim().toUpperCase(),
         installationReportNumber: assetReportNo.trim().toUpperCase(),
-        installationReportLink: assetReportLink.trim(),
         attachmentName: assetAttachmentName || undefined,
         attachmentDataUrl: assetAttachmentDataUrl || undefined,
         attachments: assetAttachments.length > 0 ? assetAttachments : prefilledAsset.attachments,
         accessories: parsedAccessories,
-        partsApplicable: parsedParts,
+        partsApplicable: savedParts,
       });
       setSuccessMessage(`Asset ${assetSerial.toUpperCase()} updated & live synced!`);
     } else {
@@ -530,19 +603,19 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
         roomNumber: assetRoom.trim().toUpperCase(),
         department: assetDept,
         installationDate: assetInstallDate || undefined,
-        warrantyExpiry: assetWarrantyExpiry || undefined,
+        warrantyDuration: `${assetWarrantyYears} ${assetWarrantyYears === 1 ? 'Year' : 'Years'}`,
+        warrantyExpiry: effectiveWarrantyExpiry,
         ppmFrequency: assetPpmFrequency,
         ppmType: assetPpmFrequency !== 'None' ? assetPpmType : undefined,
         lastPpmDate: assetLastPpmDate || undefined,
         nextPpmDate: calculatedNextPpm,
         invoiceNo: assetInvoiceNo.trim().toUpperCase(),
         installationReportNumber: assetReportNo.trim().toUpperCase(),
-        installationReportLink: assetReportLink.trim(),
         attachmentName: assetAttachmentName || undefined,
         attachmentDataUrl: assetAttachmentDataUrl || undefined,
         attachments: assetAttachments,
         accessories: parsedAccessories,
-        partsApplicable: parsedParts,
+        partsApplicable: savedParts,
         status: 'Active',
       });
       setSuccessMessage(`Asset ${assetSerial.toUpperCase()} registered & live updated in database!`);
@@ -1375,7 +1448,7 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                 </div>
               </div>
 
-              {/* Install Date, Warranty, Invoice */}
+              {/* Install Date, Warranty Duration, Invoice */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-extrabold text-slate-800 uppercase mb-1">
@@ -1385,9 +1458,13 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                     type="date"
                     value={assetInstallDate}
                     onChange={(e) => {
-                      setAssetInstallDate(e.target.value);
+                      const newDate = e.target.value;
+                      setAssetInstallDate(newDate);
+                      if (newDate && assetWarrantyYears > 0) {
+                        setAssetWarrantyExpiry(computeWarrantyExpiry(newDate, assetWarrantyYears));
+                      }
                       if (!assetLastPpmDate && assetPpmFrequency !== 'None') {
-                        setAssetNextPpmDate(calculateNextPpmDate(e.target.value, assetPpmFrequency));
+                        setAssetNextPpmDate(calculateNextPpmDate(newDate, assetPpmFrequency));
                       }
                     }}
                     className="w-full px-3 py-2 text-xs bg-white text-black font-semibold border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:bg-white focus:text-black focus:outline-hidden"
@@ -1395,15 +1472,37 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-extrabold text-slate-800 uppercase mb-1">
-                    Warranty Expiry
+                  <label className="block text-[11px] font-extrabold text-slate-800 uppercase mb-1 flex items-center justify-between">
+                    <span>Warranty Duration</span>
+                    <span className="text-[10px] text-teal-700 font-bold">
+                      {assetWarrantyYears === 0 ? '0 Yrs (Out)' : `${assetWarrantyYears} Yr${assetWarrantyYears > 1 ? 's' : ''}`}
+                    </span>
                   </label>
-                  <input
-                    type="date"
-                    value={assetWarrantyExpiry}
-                    onChange={(e) => setAssetWarrantyExpiry(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-white text-black font-semibold border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:bg-white focus:text-black focus:outline-hidden"
-                  />
+                  <select
+                    value={assetWarrantyYears}
+                    onChange={(e) => {
+                      const yrs = parseInt(e.target.value, 10);
+                      setAssetWarrantyYears(yrs);
+                      if (assetInstallDate) {
+                        setAssetWarrantyExpiry(computeWarrantyExpiry(assetInstallDate, yrs));
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-xs bg-white text-black font-semibold border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
+                  >
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((yr) => (
+                      <option key={`warranty-${yr}`} value={yr}>
+                        {yr === 0 ? '0 Years (No Warranty / Out of Warranty)' : `${yr} ${yr === 1 ? 'Year' : 'Years'} Warranty`}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-1 flex items-center justify-between text-[10px]">
+                    <span className="text-slate-500 font-medium">Expires on:</span>
+                    <span className="font-mono font-bold text-teal-900">
+                      {assetWarrantyYears === 0
+                        ? 'No Warranty'
+                        : assetWarrantyExpiry || (assetInstallDate ? computeWarrantyExpiry(assetInstallDate, assetWarrantyYears) : 'Set Install Date')}
+                    </span>
+                  </div>
                 </div>
 
                 <div>
@@ -1420,35 +1519,18 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                 </div>
               </div>
 
-              {/* Installation Report & Drive Link */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-extrabold text-slate-800 uppercase mb-1">
-                    Installation Report No
-                  </label>
-                  <input
-                    type="text"
-                    value={assetReportNo}
-                    onChange={(e) => setAssetReportNo(e.target.value.toUpperCase())}
-                    placeholder="e.g. INST-REP-2026"
-                    className="w-full px-3 py-2 text-xs bg-white text-black font-mono font-bold uppercase border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:bg-white focus:text-black focus:outline-hidden placeholder:text-slate-400"
-                  />
-                </div>
-
-                {isAdmin && (
-                  <div>
-                    <label className="block text-[11px] font-extrabold text-slate-800 uppercase mb-1">
-                      Google Drive Report Link
-                    </label>
-                    <input
-                      type="text"
-                      value={assetReportLink}
-                      onChange={(e) => setAssetReportLink(e.target.value)}
-                      placeholder="https://drive.google.com/..."
-                      className="w-full px-3 py-2 text-xs bg-white text-black font-mono font-semibold border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:bg-white focus:text-black focus:outline-hidden placeholder:text-slate-400"
-                    />
-                  </div>
-                )}
+              {/* Installation Report Number */}
+              <div>
+                <label className="block text-[11px] font-extrabold text-slate-800 uppercase mb-1">
+                  Installation Report No
+                </label>
+                <input
+                  type="text"
+                  value={assetReportNo}
+                  onChange={(e) => setAssetReportNo(e.target.value.toUpperCase())}
+                  placeholder="e.g. INST-REP-2026"
+                  className="w-full px-3 py-2 text-xs bg-white text-black font-mono font-bold uppercase border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:bg-white focus:text-black focus:outline-hidden placeholder:text-slate-400"
+                />
               </div>
 
               {/* REAL ATTACHED FILE TO DATABASE FOR ASSET */}
@@ -1537,19 +1619,50 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                 )}
               </div>
 
-              {/* Applicable Parts & Accessories */}
+              {/* Applicable Parts (3 Items) & Accessories */}
               <div className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-extrabold text-slate-800 uppercase mb-1">
-                    Applicable Parts (Comma separated)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={assetPartsText}
-                    onChange={(e) => setAssetPartsText(e.target.value)}
-                    placeholder="e.g. Sensor: SN-221, Solenoid Valve: SV-104, Power Supply: PS-90"
-                    className="w-full px-3 py-2 text-xs bg-white text-black font-semibold border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:bg-white focus:text-black focus:outline-hidden placeholder:text-slate-400"
-                  />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-extrabold text-slate-800 uppercase">
+                      Applicable Parts (Up to 3 Items)
+                    </label>
+                    <span className="text-[10px] text-slate-500 font-semibold">
+                      Item Name & Serial Number
+                    </span>
+                  </div>
+                  <div className="space-y-2 bg-slate-50/90 p-2.5 rounded-xl border border-slate-200">
+                    {[0, 1, 2].map((idx) => (
+                      <div key={`part-row-${idx}`} className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-2 text-[10px] font-black text-teal-700">#{idx + 1}</span>
+                          <input
+                            type="text"
+                            value={assetParts[idx]?.name || ''}
+                            onChange={(e) => {
+                              const updated = [...assetParts];
+                              updated[idx] = { ...updated[idx], name: e.target.value };
+                              setAssetParts(updated);
+                            }}
+                            placeholder={`Part ${idx + 1} Name (e.g. Sensor, Tube, Board)`}
+                            className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white text-black font-semibold border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:bg-white focus:text-black focus:outline-hidden placeholder:text-slate-400"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            value={assetParts[idx]?.serialNumber || ''}
+                            onChange={(e) => {
+                              const updated = [...assetParts];
+                              updated[idx] = { ...updated[idx], serialNumber: e.target.value.toUpperCase() };
+                              setAssetParts(updated);
+                            }}
+                            placeholder={`Part ${idx + 1} Serial Number`}
+                            className="w-full px-2.5 py-1.5 text-xs bg-white text-black font-mono font-bold uppercase border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:bg-white focus:text-black focus:outline-hidden placeholder:text-slate-400"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div>

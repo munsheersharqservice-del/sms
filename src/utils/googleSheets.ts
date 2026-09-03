@@ -387,9 +387,10 @@ export async function appendAssetToSheet(
 ): Promise<boolean> {
   const cleanId = extractSpreadsheetId(spreadsheetId);
   let matchedTab = 'Equipment';
+  let existingTabs: string[] = [];
 
   try {
-    const existingTabs = await getSpreadsheetTabTitles(accessToken, cleanId);
+    existingTabs = await getSpreadsheetTabTitles(accessToken, cleanId);
     if (existingTabs && existingTabs.length > 0) {
       const eqCandidates = ['Equipment', 'Assets', 'Asset_Registry', 'Machines', 'Asset Registry', 'Equipments', 'Equipment_List'];
       matchedTab = matchTabName(existingTabs, eqCandidates, 'Equipment');

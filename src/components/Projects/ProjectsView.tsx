@@ -104,7 +104,7 @@ export const ProjectsView: React.FC = () => {
 
   // Document Submission Form State
   const [docDetails, setDocDetails] = useState('');
-  const [docLink, setDocLink] = useState('https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?usp=drive_link');
+  const [docLink, setDocLink] = useState('');
   const [docDate, setDocDate] = useState(new Date().toISOString().split('T')[0]);
 
   const [successToast, setSuccessToast] = useState<string | null>(null);
@@ -1019,12 +1019,13 @@ export const ProjectsView: React.FC = () => {
 
               {isAdmin && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">GOOGLE DRIVE LINK</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">GOOGLE DRIVE LINK (OPTIONAL)</label>
                   <input
                     type="text"
                     value={docLink}
                     onChange={(e) => setDocLink(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono"
+                    placeholder="https://drive.google.com/..."
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono placeholder:text-slate-400"
                   />
                 </div>
               )}

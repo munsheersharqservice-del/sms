@@ -184,10 +184,8 @@ export async function uploadAttachmentToGoogleDrive(
     console.warn('Server proxy drive upload error:', e);
   }
 
-  // Set default search link in folder
-  attachment.driveLink = caseNumber
-    ? `https://drive.google.com/drive/folders/${SHARQ_GOOGLE_DRIVE_FOLDER_ID}?search=${encodeURIComponent(caseNumber)}`
-    : `${SHARQ_GOOGLE_DRIVE_FOLDER_URL}`;
+  // Keep driveLink empty if specific file URL was not generated to avoid displaying raw folder link in UI
+  attachment.driveLink = '';
   attachment.uploadStatus = token ? 'uploaded' : 'local';
   return attachment;
 }

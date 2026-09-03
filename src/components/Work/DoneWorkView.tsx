@@ -454,9 +454,15 @@ export const DoneWorkView: React.FC = () => {
                     <span className="font-extrabold text-sm font-mono text-slate-900 bg-white px-2.5 py-0.5 rounded border border-slate-300 shadow-2xs">
                       #{log.ticketNumber || log.caseNumber}
                     </span>
-                    <span className="bg-white/80 text-slate-800 text-xs font-bold px-2 py-0.5 rounded-md border border-slate-300">
-                      {log.callType || log.workClassification}
-                    </span>
+                    {(() => {
+                      const rawType = log.callType || log.workClassification || 'Service';
+                      const cleanType = (rawType.startsWith('http') || rawType.includes('drive.google.com')) ? 'Service' : rawType;
+                      return (
+                        <span className="bg-white/80 text-slate-800 text-xs font-bold px-2 py-0.5 rounded-md border border-slate-300">
+                          {cleanType}
+                        </span>
+                      );
+                    })()}
                     <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase border shadow-2xs ${badgeStyle}`}>
                       {log.status || 'Done'}
                     </span>

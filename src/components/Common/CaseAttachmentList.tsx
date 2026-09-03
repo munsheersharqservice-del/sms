@@ -30,13 +30,17 @@ export const CaseAttachmentList: React.FC<CaseAttachmentListProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeModalIndex, setActiveModalIndex] = useState(0);
 
-  // Normalize and deduplicate attachment items
+  // Normalize and deduplicate attachment items, strictly hiding generic folder links
   const items: AttachmentItem[] = (() => {
     const seen = new Set<string>();
     const result: AttachmentItem[] = [];
 
     for (const att of attachments) {
       if (!att) continue;
+      // Exclude generic Google Drive folder link from attachments display
+      if (att.driveLink?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') && !att.dataUrl) continue;
+      if (att.dataUrl?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9')) continue;
+
       const key = att.id || att.driveFileId || att.dataUrl || att.driveLink || att.name;
       if (key && !seen.has(key)) {
         seen.add(key);
@@ -44,7 +48,12 @@ export const CaseAttachmentList: React.FC<CaseAttachmentListProps> = ({
       }
     }
 
-    if (result.length === 0 && legacyAttachmentUrl) {
+    if (
+      result.length === 0 &&
+      legacyAttachmentUrl &&
+      !legacyAttachmentUrl.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') &&
+      !legacyAttachmentUrl.includes('/folders/')
+    ) {
       result.push({
         id: `legacy-${caseTicket || Date.now()}`,
         name: legacyReportNumber ? `Report-${legacyReportNumber}` : `Attachment-Case-${caseTicket || 'Document'}`,

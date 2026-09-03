@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   Laptop2,
@@ -57,6 +57,7 @@ export const MyDeskView: React.FC = () => {
     cases,
     assignedCases,
     isAdmin,
+    assets,
     updateCase,
     addDoneWorkLog,
     spareParts,
@@ -215,6 +216,17 @@ export const MyDeskView: React.FC = () => {
     return true;
   });
 
+  // Filtered equipment options based on selected case customer or all assets
+  const customerEquipmentOptions = useMemo(() => {
+    if (!assets || assets.length === 0) return [];
+    if (selectedCaseForAction?.customerName) {
+      const custUpper = selectedCaseForAction.customerName.trim().toUpperCase();
+      const filtered = assets.filter((a) => (a.customerName || '').trim().toUpperCase() === custUpper);
+      if (filtered.length > 0) return filtered;
+    }
+    return assets;
+  }, [assets, selectedCaseForAction]);
+
   const openStatusModal = (serviceCase: ServiceCase, newStatus: CaseStatus) => {
     setSelectedCaseForAction(serviceCase);
     setTargetStatus(newStatus);
@@ -226,7 +238,7 @@ export const MyDeskView: React.FC = () => {
     setHasInvoice(serviceCase.invoiceRequired || 'No');
     setInvoiceNumber(serviceCase.invoiceNumber || '');
 
-    const serial = serviceCase.serialNumber || 'SN-UNKNOWN';
+    const serial = serviceCase.serialNumber && serviceCase.serialNumber !== 'SN-UNKNOWN' ? serviceCase.serialNumber : '';
     const repNum = serviceCase.serviceReportNumber || `SR-2026-${serviceCase.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`;
 
     setManualSerialNumber(serial);
@@ -234,8 +246,7 @@ export const MyDeskView: React.FC = () => {
     setManualUploadedFile(null);
     setManualUploadedItem(null);
     setManualDriveFolderLink(
-      serviceCase.serviceReportDriveLink ||
-        `https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?search=${encodeURIComponent(serial)}`
+      serviceCase.serviceReportDriveLink || ''
     );
 
     setCustomerSignatoryName(serviceCase.customerSignatoryName || `${serviceCase.customerName} Representative`);
@@ -354,7 +365,7 @@ export const MyDeskView: React.FC = () => {
           return;
         }
         finalReportNum = manualReportNumber.trim() || `SR-${manualSerialNumber.trim()}`;
-        finalDriveLink = manualUploadedItem?.driveLink || manualDriveFolderLink || `https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?search=${encodeURIComponent(manualSerialNumber.trim())}`;
+        finalDriveLink = manualUploadedItem?.driveLink || manualDriveFolderLink || '';
         finalAttachment = manualUploadedItem?.name || (manualUploadedFile ? manualUploadedFile.name : `Scanned_Report_${manualSerialNumber.trim()}.pdf`);
 
         if (manualUploadedItem) {
@@ -363,12 +374,12 @@ export const MyDeskView: React.FC = () => {
       } else if (docMethod === 'DIGITAL_REPORT') {
         docMethodName = 'Digital Report';
         finalReportNum = manualReportNumber.trim() || `SR-2026-${selectedCaseForAction.ticketNumber}`;
-        finalDriveLink = `https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?search=${encodeURIComponent(selectedCaseForAction.serialNumber || selectedCaseForAction.ticketNumber)}`;
+        finalDriveLink = selectedCaseForAction.serviceReportDriveLink || '';
         finalAttachment = `Digital_Report_${selectedCaseForAction.ticketNumber}.pdf`;
       } else if (docMethod === 'ATTACHED_DOC') {
         docMethodName = 'Attached Document';
         finalReportNum = docNumber.trim() || manualReportNumber.trim() || `DOC-${selectedCaseForAction.ticketNumber}`;
-        finalDriveLink = attachedDocItem?.driveLink || `https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?search=${encodeURIComponent(docNumber.trim() || selectedCaseForAction.ticketNumber)}`;
+        finalDriveLink = attachedDocItem?.driveLink || '';
         finalAttachment = attachedDocItem?.name || (attachedDocFile ? attachedDocFile.name : `${docType}_${docNumber.trim() || selectedCaseForAction.ticketNumber}.pdf`);
 
         if (attachedDocItem) {
@@ -1198,13 +1209,31 @@ export const MyDeskView: React.FC = () => {
                           <input
                             type="text"
                             required
+                            list="manual-asset-serials"
                             value={manualSerialNumber}
-                            onChange={(e) => setManualSerialNumber(e.target.value.toUpperCase())}
+                            onChange={(e) => {
+                              const val = e.target.value.toUpperCase();
+                              setManualSerialNumber(val);
+                              // Auto-fill from asset match if found
+                              const matched = customerEquipmentOptions.find(
+                                (a) => (a.serialNumber || '').trim().toUpperCase() === val.trim()
+                              );
+                              if (matched && !manualReportNumber) {
+                                setManualReportNumber(`SR-${val}`);
+                              }
+                            }}
                             placeholder="e.g. SN-883921"
                             className="w-full px-3 py-2 text-xs border border-emerald-300 rounded-lg font-mono font-bold uppercase bg-white text-black focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-400"
                           />
+                          <datalist id="manual-asset-serials">
+                            {customerEquipmentOptions.map((opt) => (
+                              <option key={opt.id || opt.serialNumber} value={opt.serialNumber}>
+                                {opt.name} - {opt.model || ''} ({opt.customerName})
+                              </option>
+                            ))}
+                          </datalist>
                           <span className="text-[10px] text-slate-500 mt-0.5 block">
-                            Files in Google Drive will be saved and indexed under this Serial Number.
+                            Choose from registered equipment or type Serial Number.
                           </span>
                         </div>
 

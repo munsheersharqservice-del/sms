@@ -1,0 +1,33 @@
+{
+  "cases": [],
+  "doneWorkLogs": [
+    {
+      "id": "dw-1788451798844",
+      "caseId": "cs-981035",
+      "ticketNumber": "981035",
+      "caseNumber": "981035",
+      "customerName": "SHARQ MEDICAL SUPPLY",
+      "serialNumber": "SN-SHARQ-001",
+      "model": "MEDICAL EQUIPMENT",
+      "department": "Service",
+      "callType": "Service",
+      "workClassification": "Service",
+      "engineerName": "MUNSHEER",
+      "dateCompleted": "2026-09-03",
+      "hoursSpent": 2.5,
+      "workDoneSummary": "DONE",
+      "serviceReportNumber": "SS",
+      "serviceReportDriveLink": "",
+      "attachments": [],
+      "partsReplaced": [],
+      "invoiceRequired": "No",
+      "customerSignatoryName": "SHARQ MEDICAL SUPPLY Representative",
+      "customerSignature": "Signed Electronically",
+      "status": "Done"
+    }
+  ],
+  "assets": [],
+  "customers": [],
+  "requests": [],
+  "softwareLicenses": []
+}

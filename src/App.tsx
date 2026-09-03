@@ -12,6 +12,7 @@ import { RequestsView } from './components/Requests/RequestsView';
 import { ProjectsView } from './components/Projects/ProjectsView';
 import { CustomersView } from './components/Customers/CustomersView';
 import { PpmDueView } from './components/Ppm/PpmDueView';
+import { EngineerProfilesView } from './components/Admin/EngineerProfilesView';
 import { LoginPage } from './components/Auth/LoginPage';
 
 const MainContent: React.FC = () => {
@@ -28,6 +29,7 @@ const MainContent: React.FC = () => {
       {activeTab === 'done_work' && <DoneWorkView />}
       {activeTab === 'requests' && <RequestsView />}
       {activeTab === 'projects' && <ProjectsView />}
+      {activeTab === 'engineer_profiles' && <EngineerProfilesView />}
     </main>
   );
 };

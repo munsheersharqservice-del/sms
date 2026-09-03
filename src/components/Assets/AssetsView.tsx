@@ -36,12 +36,14 @@ import {
   UploadCloud,
   ChevronDown,
   ChevronUp,
+  Settings,
 } from 'lucide-react';
 import { Department, Asset, AccessoryItem, SoftwareLicense, CustomerSector } from '../../types';
 import { SoftwareDirectoryView, EXCEL_SOFTWARE_REGISTRY_URL } from '../Software/SoftwareDirectoryView';
 import { RegisterSoftwareView } from '../Software/RegisterSoftwareView';
 import { AssetSoftwareSideDrawer } from './AssetSoftwareSideDrawer';
 import { CustomersView } from '../Customers/CustomersView';
+import { SheetsSyncModal } from '../GoogleSheets/SheetsSyncModal';
 import { analyzePpmStatus } from '../../utils/ppmUtils';
 import { CaseAttachmentList } from '../Common/CaseAttachmentList';
 import { SharqDigitalReportModal } from '../Common/SharqDigitalReportModal';
@@ -76,6 +78,7 @@ export const AssetsView: React.FC = () => {
   } = useApp();
 
   const [isExportingAll, setIsExportingAll] = useState(false);
+  const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [searchInput, setSearchInput] = useState<string>(assetSearchQuery || '');
   const [showFiltersList, setShowFiltersList] = useState<boolean>(false);
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
@@ -380,56 +383,74 @@ export const AssetsView: React.FC = () => {
             <span>+ Software</span>
           </button>
 
-          {/* Excel Live Sheet Link & Sync - Admin Only */}
-          {isAdmin && (
-            <>
-              <a
-                href={EXCEL_SOFTWARE_REGISTRY_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors"
-                title="Open Master Excel in Google Sheets"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              </a>
-
+          {/* Google Sheets Live Link & Sync Toolbar (Accessible to all engineers & admins) */}
+          <div className="flex items-center space-x-1.5 pl-1 border-l border-slate-200">
+            {!isGoogleConnected && (
               <button
                 type="button"
-                onClick={async () => {
-                  setIsExportingAll(true);
-                  try {
-                    if (!isGoogleConnected) {
-                      await connectGoogle();
-                    }
-                    await exportToGoogleSheets();
-                  } catch (e: any) {
-                    console.warn('Sync error:', e);
-                  } finally {
-                    setIsExportingAll(false);
+                onClick={() => connectGoogle()}
+                className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-md text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                title="Connect Google Account for Live Sheet write access"
+              >
+                Connect Google
+              </button>
+            )}
+
+            <a
+              href={currentSpreadsheetUrl || EXCEL_SOFTWARE_REGISTRY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors"
+              title="Open Connected Spreadsheet in Google Sheets"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            </a>
+
+            <button
+              type="button"
+              onClick={async () => {
+                setIsExportingAll(true);
+                try {
+                  if (!isGoogleConnected) {
+                    await connectGoogle();
                   }
-                }}
-                disabled={isExportingAll || isSyncingSheets}
-                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
-                title="Sync all assets & records live to Google Sheet"
-              >
-                <UploadCloud className={`w-3.5 h-3.5 text-emerald-600 ${isExportingAll ? 'animate-bounce' : ''}`} />
-                <span>{isExportingAll ? 'Syncing...' : 'Sync to Sheet'}</span>
-              </button>
+                  await exportToGoogleSheets();
+                } catch (e: any) {
+                  console.warn('Sync error:', e);
+                } finally {
+                  setIsExportingAll(false);
+                }
+              }}
+              disabled={isExportingAll || isSyncingSheets}
+              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+              title="Sync all assets & records live to Google Sheet"
+            >
+              <UploadCloud className={`w-3.5 h-3.5 text-emerald-600 ${isExportingAll ? 'animate-bounce' : ''}`} />
+              <span>{isExportingAll ? 'Syncing...' : 'Sync to Sheet'}</span>
+            </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  refreshSoftwareLicensesFromExcel(true);
-                  refreshFromGoogleSheets(true);
-                }}
-                disabled={isSyncingSheets}
-                className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-                title="Refresh Master Registry Data"
-              >
-                <RefreshCw className={`w-4 h-4 ${isSyncingSheets ? 'animate-spin text-teal-600' : ''}`} />
-              </button>
-            </>
-          )}
+            <button
+              type="button"
+              onClick={() => {
+                refreshSoftwareLicensesFromExcel(true);
+                refreshFromGoogleSheets(true);
+              }}
+              disabled={isSyncingSheets}
+              className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+              title="Refresh Master Registry Data from Google Sheets"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncingSheets ? 'animate-spin text-teal-600' : ''}`} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsSheetsModalOpen(true)}
+              className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+              title="Google Sheets & Webhook Configuration"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1368,6 +1389,12 @@ export const AssetsView: React.FC = () => {
           initialDoneLog={reportModalDoneLog}
         />
       )}
+
+      {/* Google Sheets Sync & Webhook Modal */}
+      <SheetsSyncModal
+        isOpen={isSheetsModalOpen}
+        onClose={() => setIsSheetsModalOpen(false)}
+      />
     </div>
   );
 };

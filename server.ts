@@ -1,8 +1,212 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import nodemailer from 'nodemailer';
+
+// Canonical List of 1 Admin and exactly 10 Service Engineers requested by Sharq
+const CANONICAL_USERS = [
+  {
+    id: 'usr-admin',
+    name: 'ADMIN',
+    email: 'admin@sharqmedical.qa',
+    role: 'Admin',
+    department: 'Both',
+    phone: '+974 4400 0000',
+    avatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=150&auto=format&fit=crop&q=80',
+    title: 'System Administrator',
+    bio: 'System Administrator at Sharq Medical Supply W.L.L. Doha, Qatar.',
+    password: '2277',
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'eng-bara',
+    name: 'BARA',
+    email: 'bara.sharqservice@gmail.com',
+    role: 'Service Engineer',
+    department: 'Dental',
+    phone: '+974 5500 0101',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+    title: 'Dental Equipment Service Engineer',
+    bio: 'Dental & Medical Equipment Specialist at Sharq Medical Supply.',
+    password: '101',
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'eng-hazim',
+    name: 'HAZIM',
+    email: 'hazim.service.sharq@gmail.com',
+    role: 'Service Engineer',
+    department: 'Dental',
+    phone: '+974 5500 0102',
+    avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&auto=format&fit=crop&q=80',
+    title: 'Biomedical Service Engineer',
+    bio: 'Dental Imaging & Treatment Units Engineer at Sharq Medical Supply.',
+    password: '102',
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'eng-husam',
+    name: 'HUSAM',
+    email: 'husamsharqservice@gmail.com',
+    role: 'Service Engineer',
+    department: 'Medical',
+    phone: '+974 5500 0103',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    title: 'Medical Equipment Service Engineer',
+    bio: 'Medical & Surgical Equipment Engineer at Sharq Medical Supply.',
+    password: '103',
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'eng-jamil',
+    name: 'JAMIL',
+    email: 'services@sharq.qa',
+    role: 'Service Engineer',
+    department: 'Both',
+    phone: '+974 5500 0104',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    title: 'Field Service Engineer',
+    bio: 'Customer Support & Field Maintenance Engineer at Sharq Medical Supply.',
+    password: '104',
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'eng-abdulkader',
+    name: 'ABDULKADER',
+    email: 'abdulkader.sharq@gmail.com',
+    role: 'Service Engineer',
+    department: 'Dental',
+    phone: '+974 5500 0105',
+    avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
+    title: 'Biomedical Service Engineer',
+    bio: 'Biomedical Calibration & Preventive Maintenance Specialist at Sharq Medical Supply.',
+    password: '105',
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'eng-mario',
+    name: 'MARIO',
+    email: 'mariosharqservice@gmail.com',
+    role: 'Service Engineer',
+    department: 'Both',
+    phone: '+974 5500 0106',
+    avatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80',
+    title: 'Biomedical Diagnostics Engineer',
+    bio: 'Biomedical Diagnostic Systems Engineer at Sharq Medical Supply.',
+    password: '106',
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'eng-mike',
+    name: 'MIKE',
+    email: 'mike.servicesharq@gmail.com',
+    role: 'Service Engineer',
+    department: 'Medical',
+    phone: '+974 5500 0107',
+    avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80',
+    title: 'Field Service Engineer',
+    bio: 'Field Engineering & Preventive Maintenance Specialist at Sharq Medical Supply.',
+    password: '107',
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'eng-munsheer',
+    name: 'MUNSHEER',
+    email: 'munsheer.sharqservice@gmail.com',
+    role: 'Service Engineer',
+    department: 'Both',
+    phone: '+974 5500 0108',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    title: 'Lead Biomedical & Service Engineer',
+    bio: 'Senior Biomedical Engineer & Service Operations at Sharq Medical Supply.',
+    password: '108',
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'eng-saad',
+    name: 'SAAD',
+    email: 'saadservicesharq@gmail.com',
+    role: 'Service Engineer',
+    department: 'Dental',
+    phone: '+974 5500 0109',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+    title: 'Dental Equipment Specialist',
+    bio: 'Dental Imaging Systems & Field Service Specialist at Sharq Medical Supply.',
+    password: '109',
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'eng-shihad',
+    name: 'SHIHAD',
+    email: 'services@sharq.qa',
+    role: 'Service Engineer',
+    department: 'Both',
+    phone: '+974 5500 0110',
+    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
+    title: 'Field Service Engineer',
+    bio: 'Customer Support & Technical Logistics Engineer at Sharq Medical Supply.',
+    password: '110',
+    createdAt: '2026-01-01',
+  },
+];
+
+// Persistent File-Based Storage on Disk for live sync safety
+const PERSISTENT_DB_PATH = path.join(process.cwd(), 'data', 'sharq_persistent_db.json');
+
+function loadPersistentData(): {
+  cases: any[];
+  doneWorkLogs: any[];
+  assets: any[];
+  customers: any[];
+  requests: any[];
+  softwareLicenses: any[];
+} {
+  try {
+    if (fs.existsSync(PERSISTENT_DB_PATH)) {
+      const raw = fs.readFileSync(PERSISTENT_DB_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      return {
+        cases: Array.isArray(parsed.cases) ? parsed.cases : [],
+        doneWorkLogs: Array.isArray(parsed.doneWorkLogs) ? parsed.doneWorkLogs : [],
+        assets: Array.isArray(parsed.assets) ? parsed.assets : [],
+        customers: Array.isArray(parsed.customers) ? parsed.customers : [],
+        requests: Array.isArray(parsed.requests) ? parsed.requests : [],
+        softwareLicenses: Array.isArray(parsed.softwareLicenses) ? parsed.softwareLicenses : [],
+      };
+    }
+  } catch (err) {
+    console.warn('Persistent DB read note:', err);
+  }
+  return {
+    cases: [],
+    doneWorkLogs: [],
+    assets: [],
+    customers: [],
+    requests: [],
+    softwareLicenses: [],
+  };
+}
+
+function savePersistentData(data: {
+  cases: any[];
+  doneWorkLogs: any[];
+  assets: any[];
+  customers: any[];
+  requests: any[];
+  softwareLicenses: any[];
+}) {
+  try {
+    const dir = path.dirname(PERSISTENT_DB_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(PERSISTENT_DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Persistent DB write note:', err);
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -55,12 +259,25 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
     }
   });
 
-  // In-memory staged registry for two-way live sync
-  const stagedSoftwareLicenses: any[] = [];
-  const stagedAssets: any[] = [];
-  const stagedCustomers: any[] = [];
-  const stagedRequests: any[] = [];
-  const stagedCases: any[] = [];
+  // Load persistent disk database on boot
+  const initialData = loadPersistentData();
+  const stagedSoftwareLicenses: any[] = initialData.softwareLicenses;
+  const stagedAssets: any[] = initialData.assets;
+  const stagedCustomers: any[] = initialData.customers;
+  const stagedRequests: any[] = initialData.requests;
+  const stagedCases: any[] = initialData.cases;
+  const stagedDoneWork: any[] = initialData.doneWorkLogs;
+
+  const persistCurrentState = () => {
+    savePersistentData({
+      cases: stagedCases,
+      doneWorkLogs: stagedDoneWork,
+      assets: stagedAssets,
+      customers: stagedCustomers,
+      requests: stagedRequests,
+      softwareLicenses: stagedSoftwareLicenses,
+    });
+  };
 
   // In-memory OTP & Registered Engineers Store
   interface StoredOtp {
@@ -592,7 +809,7 @@ service@sharqmedicalsupply.qa`;
             sector: rawSector,
             poNumber: r[13] || r[8] || '',
             accessories: [],
-            installationReportLink: r[15] || '',
+            installationReportLink: (r[15] && !r[15].includes('folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9')) ? r[15].trim() : '',
             status: (r[14] || 'Active').trim(),
             createdAt: r[6] || new Date().toISOString(),
           };
@@ -617,33 +834,8 @@ service@sharqmedicalsupply.qa`;
           };
         });
 
-      // 5. Process Engineers / Users
-      const users = engRows
-        .filter((r) => (r[0] || r[1]) && !r[0]?.toLowerCase().includes('engineer id') && !r[0]?.toLowerCase().includes('full name'))
-        .map((r, i) => {
-          let name = (r[1] && !r[1].includes('@') ? r[1] : r[0] || `ENGINEER_${i + 1}`).toUpperCase().trim();
-          if (name.toLowerCase().startsWith('usr-') && r[1]) {
-            name = r[1].toUpperCase().trim();
-          }
-          const email = (r[2]?.includes('@') ? r[2] : r[1]?.includes('@') ? r[1] : `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}@sharqmedical.com`).toLowerCase().trim();
-          const role = (r[3]?.toLowerCase().includes('admin') || name === 'MUNSHEER') ? 'Admin' : 'Service Engineer';
-          const department = (r[4] === 'Dental' || r[4] === 'Medical' ? r[4] : 'Both');
-          const phone = r[5] || '+974 5500 000' + (i + 1);
-          const title = r[6] || 'Biomedical Service Engineer';
-          const bio = r[7] || `${department} Service Engineer at Sharq Medical Supply.`;
-
-          return {
-            id: `usr-${i + 1}`,
-            name,
-            email,
-            role,
-            department,
-            phone,
-            title,
-            bio,
-            createdAt: r[8] || '2026-01-01',
-          };
-        });
+      // 5. Canonical Engineers & Admin Directory (Only Admin + 10 Authorized Field Engineers)
+      const users = CANONICAL_USERS;
 
       // 6. Process Projects
       const projects = prjRows
@@ -735,46 +927,108 @@ service@sharqmedicalsupply.qa`;
         }
       }
 
-      // Merge staged assets (registered equipment stays until remote reflects, remote edits take precedence)
+      // Merge staged assets (staged edits take precedence over remote)
       for (const staged of stagedAssets) {
         const serial = (staged.serialNumber || '').trim().toUpperCase();
         const idx = assets.findIndex((a) => (serial && (a.serialNumber || '').trim().toUpperCase() === serial) || a.id === staged.id);
         if (idx >= 0) {
-          assets[idx] = { ...staged, ...assets[idx] };
+          assets[idx] = { ...assets[idx], ...staged };
         } else {
           assets.unshift(staged);
         }
       }
 
-      // Merge staged customers (registered customers stay until remote reflects, remote edits take precedence)
+      // Merge staged customers (staged edits take precedence over remote)
       for (const staged of stagedCustomers) {
         const stagedName = (staged.name || '').trim().toUpperCase();
         const idx = customers.findIndex((c) => (stagedName && (c.name || '').trim().toUpperCase() === stagedName) || c.id === staged.id);
         if (idx >= 0) {
-          customers[idx] = { ...staged, ...customers[idx] };
+          customers[idx] = { ...customers[idx], ...staged };
         } else {
           customers.push(staged);
         }
       }
 
-      // Merge staged requests
+      // Merge staged requests (staged edits take precedence over remote)
       for (const staged of stagedRequests) {
         const idx = requests.findIndex((r) => r.requestNumber === staged.requestNumber || r.id === staged.id);
         if (idx >= 0) {
-          requests[idx] = { ...staged, ...requests[idx] };
+          requests[idx] = { ...requests[idx], ...staged };
         } else {
           requests.unshift(staged);
         }
       }
 
-      // Merge staged cases
+      // Merge staged cases (staged edits like EXECUTE & UPDATE CALL take precedence over remote)
       for (const staged of stagedCases) {
         const targetTicket = (staged.ticketNumber || staged.caseNumber || '').trim().toUpperCase();
         const idx = cases.findIndex((c) => (c.ticketNumber || c.caseNumber || '').trim().toUpperCase() === targetTicket);
         if (idx >= 0) {
-          cases[idx] = { ...staged, ...cases[idx] };
+          cases[idx] = { ...cases[idx], ...staged };
         } else {
           cases.unshift(staged);
+        }
+      }
+
+      // Build unified Done Work Logs: explicit logs + all completed cases
+      const finalDoneWorkLogs: any[] = [];
+      const seenDoneKeys = new Set<string>();
+
+      // 1. Explicit staged DoneWork logs take highest priority
+      for (const dw of stagedDoneWork) {
+        const key = (dw.ticketNumber || dw.caseNumber || dw.serviceReportNumber || dw.id || '').toString().trim().toUpperCase();
+        if (key && !seenDoneKeys.has(key)) {
+          seenDoneKeys.add(key);
+          finalDoneWorkLogs.push(dw);
+        }
+      }
+
+      // 2. All cases with status === 'Done'
+      for (const rawC of cases) {
+        const c = rawC as any;
+        if (c.status === 'Done' || c.serviceReportNumber) {
+          const key = (c.ticketNumber || c.caseNumber || c.serviceReportNumber || c.id || '').toString().trim().toUpperCase();
+          if (key && !seenDoneKeys.has(key)) {
+            seenDoneKeys.add(key);
+            finalDoneWorkLogs.push({
+              id: `dw-${c.ticketNumber || c.id || Date.now()}`,
+              caseId: c.id,
+              ticketNumber: c.ticketNumber,
+              caseNumber: c.ticketNumber,
+              customerName: c.customerName,
+              serialNumber: c.serialNumber || 'SN-UNKNOWN',
+              model: c.model || 'Medical Equipment',
+              department: c.department,
+              callType: c.callType,
+              workClassification: c.workClassification || c.callType,
+              engineerName: c.assignedEngineerName || 'ENGINEER',
+              dateCompleted: c.closeDate || (c.createdAt ? c.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+              hoursSpent: 2.5,
+              workDoneSummary: c.remarks || c.issueDescription || 'Service execution completed successfully.',
+              serviceReportNumber: c.serviceReportNumber || `SR-${c.ticketNumber}`,
+              serviceReportDriveLink: c.serviceReportDriveLink || '',
+              attachments: c.attachments || (c.attachmentUrl ? [c.attachmentUrl] : []),
+              partsReplaced: (c.sparePartsUsed || []).map((p: any) => ({
+                partName: p.itemName || p.partName,
+                partCode: p.itemCode || p.partCode,
+                quantity: p.quantity || 1,
+              })),
+              invoiceRequired: c.invoiceRequired,
+              invoiceNumber: c.invoiceNumber,
+              customerSignatoryName: c.customerSignatoryName || `${c.customerName} Representative`,
+              customerSignature: c.customerSignature || 'Signed Electronically',
+              status: 'Done',
+            });
+          }
+        }
+      }
+
+      // 3. Existing parsed doneWorkLogs from remote sheets
+      for (const dw of doneWorkLogs) {
+        const key = (dw.ticketNumber || dw.caseNumber || dw.serviceReportNumber || dw.id || '').toString().trim().toUpperCase();
+        if (key && !seenDoneKeys.has(key)) {
+          seenDoneKeys.add(key);
+          finalDoneWorkLogs.push(dw);
         }
       }
 
@@ -783,7 +1037,7 @@ service@sharqmedicalsupply.qa`;
         spreadsheetId: sheetId,
         counts: {
           cases: cases.length,
-          doneWorkLogs: doneWorkLogs.length,
+          doneWorkLogs: finalDoneWorkLogs.length,
           assets: assets.length,
           customers: customers.length,
           users: users.length,
@@ -793,7 +1047,7 @@ service@sharqmedicalsupply.qa`;
         },
         data: {
           cases,
-          doneWorkLogs,
+          doneWorkLogs: finalDoneWorkLogs,
           assets,
           customers,
           users,
@@ -943,10 +1197,32 @@ service@sharqmedicalsupply.qa`;
         }
       }
 
+      // Webhook forwarding
+      const webhookUrl = (req.headers['x-sheets-webhook'] as string) || process.env.GOOGLE_APPS_SCRIPT_URL;
+      let webhookForwarded = false;
+      if (webhookUrl && webhookUrl.startsWith('http')) {
+        try {
+          const hookRes = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'append_software',
+              data: newLic,
+              timestamp: new Date().toISOString(),
+            }),
+          });
+          webhookForwarded = hookRes.ok;
+          if (webhookForwarded) sheetsSyncSuccess = true;
+        } catch (hookErr: any) {
+          console.warn('Software webhook forwarding note:', hookErr.message);
+        }
+      }
+
       return res.json({
         success: true,
         license: newLic,
         googleSheetsAppended: sheetsSyncSuccess,
+        webhookForwarded,
         totalSoftwareInServer: stagedSoftwareLicenses.length,
       });
     } catch (err: any) {
@@ -1075,10 +1351,34 @@ service@sharqmedicalsupply.qa`;
         }
       }
 
+      // Webhook fallback or primary live Google Apps Script trigger
+      const webhookUrl = (req.headers['x-sheets-webhook'] as string) || process.env.GOOGLE_APPS_SCRIPT_URL;
+      let webhookForwarded = false;
+      if (webhookUrl && webhookUrl.startsWith('http')) {
+        try {
+          const hookRes = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'append_asset',
+              data: newAsset,
+              timestamp: new Date().toISOString(),
+            }),
+          });
+          webhookForwarded = hookRes.ok;
+          if (webhookForwarded) {
+            sheetsSyncSuccess = true;
+          }
+        } catch (hookErr: any) {
+          console.warn('Asset webhook forwarding note:', hookErr.message);
+        }
+      }
+
       return res.json({
         success: true,
         asset: newAsset,
         googleSheetsAppended: sheetsSyncSuccess,
+        webhookForwarded,
         totalAssetsInServer: stagedAssets.length,
       });
     } catch (err: any) {
@@ -1374,10 +1674,34 @@ service@sharqmedicalsupply.qa`;
         }
       }
 
+      // Webhook fallback or primary live Google Apps Script trigger
+      const webhookUrl = (req.headers['x-sheets-webhook'] as string) || process.env.GOOGLE_APPS_SCRIPT_URL;
+      let webhookForwarded = false;
+      if (webhookUrl && webhookUrl.startsWith('http')) {
+        try {
+          const hookRes = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'append_customer',
+              data: newCust,
+              timestamp: new Date().toISOString(),
+            }),
+          });
+          webhookForwarded = hookRes.ok;
+          if (webhookForwarded) {
+            sheetsSyncSuccess = true;
+          }
+        } catch (hookErr: any) {
+          console.warn('Customer webhook forwarding note:', hookErr.message);
+        }
+      }
+
       return res.json({
         success: true,
         customer: newCust,
         googleSheetsAppended: sheetsSyncSuccess,
+        webhookForwarded,
         authExpired,
         totalCustomersInServer: stagedCustomers.length,
       });
@@ -1667,7 +1991,7 @@ service@sharqmedicalsupply.qa`;
       const authHeader = req.headers.authorization;
       const webhookUrl = (req.headers['x-sheets-webhook'] as string) || process.env.GOOGLE_APPS_SCRIPT_URL;
 
-      let driveLink = `https://drive.google.com/drive/folders/${targetFolderId}?usp=drive_link`;
+      let driveLink = '';
       let fileId = `drive_${Date.now()}`;
 
       // 1. If Bearer token is passed from client, execute Google Drive API v3 upload directly
@@ -1789,6 +2113,20 @@ service@sharqmedicalsupply.qa`;
     try {
       const caseItem = req.body;
       const webhookUrl = req.headers['x-sheets-webhook'] as string || process.env.GOOGLE_APPS_SCRIPT_URL;
+
+      // Update stagedCases in memory
+      const ticketNum = (caseItem.ticketNumber || caseItem.caseNumber || '').trim().toUpperCase();
+      if (ticketNum) {
+        const existingIdx = stagedCases.findIndex(
+          (c) => (c.ticketNumber || c.caseNumber || '').trim().toUpperCase() === ticketNum
+        );
+        if (existingIdx >= 0) {
+          stagedCases[existingIdx] = { ...stagedCases[existingIdx], ...caseItem };
+        } else {
+          stagedCases.unshift(caseItem);
+        }
+        persistCurrentState();
+      }
       
       let webhookSuccess = false;
       let webhookResponse = null;
@@ -1797,6 +2135,7 @@ service@sharqmedicalsupply.qa`;
         try {
           const hookRes = await fetch(webhookUrl, {
             method: 'POST',
+            redirect: 'follow',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               action: 'append_case',
@@ -1806,9 +2145,14 @@ service@sharqmedicalsupply.qa`;
           });
           webhookSuccess = hookRes.ok;
           try {
-            webhookResponse = await hookRes.json();
+            const rawText = await hookRes.text();
+            try {
+              webhookResponse = JSON.parse(rawText);
+            } catch {
+              webhookResponse = rawText ? rawText.slice(0, 500) : null;
+            }
           } catch {
-            webhookResponse = await hookRes.text();
+            webhookResponse = null;
           }
         } catch (hookErr: any) {
           console.warn('Google Sheets Webhook forwarding failed:', hookErr.message);
@@ -1825,6 +2169,195 @@ service@sharqmedicalsupply.qa`;
     } catch (error: any) {
       console.error('Append Case Error:', error);
       return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Update Case & Sync to Google Sheets
+  app.post(['/api/cases/update', '/api/sheets/update-case'], async (req, res) => {
+    try {
+      const { id, ticketNumber, updates, caseItem } = req.body;
+      const data = caseItem || updates || req.body;
+      const targetTicket = (ticketNumber || data.ticketNumber || data.caseNumber || '').trim().toUpperCase();
+      const targetId = id || data.id;
+
+      const targetIdx = stagedCases.findIndex(
+        (c) =>
+          (targetId && c.id === targetId) ||
+          (targetTicket && (c.ticketNumber || c.caseNumber || '').trim().toUpperCase() === targetTicket)
+      );
+
+      let savedCase = null;
+      if (targetIdx >= 0) {
+        stagedCases[targetIdx] = { ...stagedCases[targetIdx], ...data };
+        savedCase = stagedCases[targetIdx];
+      } else {
+        stagedCases.unshift(data);
+        savedCase = data;
+      }
+
+      // If case was marked Done, also record in stagedDoneWork
+      if (savedCase.status === 'Done') {
+        const dwIdx = stagedDoneWork.findIndex(
+          (d) => (d.ticketNumber || d.caseNumber || '').trim().toUpperCase() === targetTicket
+        );
+        const doneLogItem = {
+          id: `dw-${savedCase.ticketNumber || savedCase.id || Date.now()}`,
+          caseId: savedCase.id,
+          ticketNumber: savedCase.ticketNumber,
+          caseNumber: savedCase.ticketNumber,
+          customerName: savedCase.customerName,
+          serialNumber: savedCase.serialNumber || 'SN-UNKNOWN',
+          model: savedCase.model || 'Medical Equipment',
+          department: savedCase.department,
+          callType: savedCase.callType,
+          workClassification: savedCase.workClassification || savedCase.callType,
+          engineerName: savedCase.assignedEngineerName || 'ENGINEER',
+          dateCompleted: savedCase.closeDate || (savedCase.createdAt ? savedCase.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+          hoursSpent: 2.5,
+          workDoneSummary: savedCase.remarks || savedCase.issueDescription || 'Service execution completed successfully.',
+          serviceReportNumber: savedCase.serviceReportNumber || `SR-${savedCase.ticketNumber}`,
+          serviceReportDriveLink: savedCase.serviceReportDriveLink || '',
+          attachments: savedCase.attachments || [],
+          partsReplaced: savedCase.sparePartsUsed || [],
+          invoiceRequired: savedCase.invoiceRequired,
+          invoiceNumber: savedCase.invoiceNumber,
+          customerSignatoryName: savedCase.customerSignatoryName || `${savedCase.customerName} Representative`,
+          customerSignature: savedCase.customerSignature || 'Signed Electronically',
+          status: 'Done',
+        };
+        if (dwIdx >= 0) {
+          stagedDoneWork[dwIdx] = { ...stagedDoneWork[dwIdx], ...doneLogItem };
+        } else {
+          stagedDoneWork.unshift(doneLogItem);
+        }
+      }
+
+      persistCurrentState();
+
+      const webhookUrl = (req.headers['x-sheets-webhook'] as string) || process.env.GOOGLE_APPS_SCRIPT_URL;
+      let webhookSuccess = false;
+      let webhookResponse = null;
+
+      if (webhookUrl && webhookUrl.startsWith('http')) {
+        try {
+          const hookRes = await fetch(webhookUrl, {
+            method: 'POST',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'update_case',
+              data: savedCase,
+              ticketNumber: targetTicket,
+              timestamp: new Date().toISOString(),
+            }),
+          });
+          webhookSuccess = hookRes.ok;
+          try {
+            const rawText = await hookRes.text();
+            try {
+              webhookResponse = JSON.parse(rawText);
+            } catch {
+              webhookResponse = rawText ? rawText.slice(0, 500) : null;
+            }
+          } catch {
+            webhookResponse = null;
+          }
+        } catch (hookErr: any) {
+          console.warn('Google Sheets Webhook update_case forwarding failed:', hookErr.message);
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: `Case #${targetTicket || targetId} updated and synced to database${webhookSuccess ? ' & Google Sheet' : ''}.`,
+        caseItem: savedCase,
+        webhookForwarded: webhookSuccess,
+        webhookResponse,
+      });
+    } catch (err: any) {
+      console.error('Update Case Error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Append Done Work Log & Live Sync Endpoint
+  app.post(['/api/sheets/append-donework', '/api/donework/append'], async (req, res) => {
+    try {
+      const logItem = req.body;
+      const targetTicket = (logItem.ticketNumber || logItem.caseNumber || logItem.serviceReportNumber || '').trim().toUpperCase();
+
+      const existingIdx = stagedDoneWork.findIndex(
+        (d) => (d.ticketNumber || d.caseNumber || d.serviceReportNumber || '').trim().toUpperCase() === targetTicket
+      );
+
+      if (existingIdx >= 0) {
+        stagedDoneWork[existingIdx] = { ...stagedDoneWork[existingIdx], ...logItem };
+      } else {
+        stagedDoneWork.unshift(logItem);
+      }
+
+      // Also ensure case in stagedCases is updated to 'Done'
+      if (targetTicket) {
+        const caseIdx = stagedCases.findIndex(
+          (c) => (c.ticketNumber || c.caseNumber || '').trim().toUpperCase() === targetTicket
+        );
+        if (caseIdx >= 0) {
+          stagedCases[caseIdx] = {
+            ...stagedCases[caseIdx],
+            status: 'Done',
+            closeDate: logItem.dateCompleted || new Date().toISOString().split('T')[0],
+            serviceReportNumber: logItem.serviceReportNumber,
+            serviceReportDriveLink: logItem.serviceReportDriveLink,
+            remarks: logItem.workDoneSummary || stagedCases[caseIdx].remarks,
+          };
+        }
+      }
+
+      persistCurrentState();
+
+      const webhookUrl = (req.headers['x-sheets-webhook'] as string) || process.env.GOOGLE_APPS_SCRIPT_URL;
+      let webhookSuccess = false;
+      let webhookResponse = null;
+
+      if (webhookUrl && webhookUrl.startsWith('http')) {
+        try {
+          const hookRes = await fetch(webhookUrl, {
+            method: 'POST',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'append_donework',
+              data: logItem,
+              ticketNumber: targetTicket,
+              timestamp: new Date().toISOString(),
+            }),
+          });
+          webhookSuccess = hookRes.ok;
+          try {
+            const rawText = await hookRes.text();
+            try {
+              webhookResponse = JSON.parse(rawText);
+            } catch {
+              webhookResponse = rawText ? rawText.slice(0, 500) : null;
+            }
+          } catch {
+            webhookResponse = null;
+          }
+        } catch (hookErr: any) {
+          console.warn('Google Sheets Webhook append_donework forwarding note:', hookErr.message);
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: `Done Work Log #${targetTicket || logItem.id} saved to database${webhookSuccess ? ' & Google Sheet' : ''}.`,
+        doneWorkLog: logItem,
+        webhookForwarded: webhookSuccess,
+        webhookResponse,
+      });
+    } catch (err: any) {
+      console.error('Append DoneWork Error:', err);
+      return res.status(500).json({ success: false, error: err.message });
     }
   });
 

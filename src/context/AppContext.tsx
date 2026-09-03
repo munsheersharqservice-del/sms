@@ -78,7 +78,8 @@ export type AppTab =
   | 'requests'
   | 'spare_parts'
   | 'customers'
-  | 'software_licenses';
+  | 'software_licenses'
+  | 'engineer_profiles';
 
 interface AppContextType {
   // Theme state
@@ -910,6 +911,98 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     sessionStorage.removeItem('sharq_active_session_user');
   };
 
+  // OTP Email Verification & Password Reset Implementation
+  const sendOtp = async (email: string, purpose: 'reset_password' | 'signup' = 'reset_password', name?: string) => {
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, purpose, name }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, message: data.error || 'Failed to send verification code.' };
+      }
+      return { success: true, message: data.message, debugOtp: data.debugOtp };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error sending verification code.' };
+    }
+  };
+
+  const verifyOtp = async (email: string, otp: string) => {
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, message: data.error || 'Invalid verification code.' };
+      }
+      return { success: true, message: data.message || 'Verification successful.' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Error verifying code.' };
+    }
+  };
+
+  const resetPassword = async (email: string, otp: string, newPass: string) => {
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp, newPassword: newPass }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, message: data.error || 'Failed to reset password.' };
+      }
+
+      // Update local state if user exists
+      setUsers((prev) =>
+        prev.map((u) => (u.email.toLowerCase() === email.toLowerCase() ? { ...u, password: newPass } : u))
+      );
+
+      return { success: true, message: data.message || 'Password successfully updated.' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error resetting password.' };
+    }
+  };
+
+  // Engineer Work Assignment Email Notification
+  const notifyEngineerWorkAssignment = async (assignmentData: {
+    engineerEmail?: string;
+    engineerName?: string;
+    ticketNumber?: string;
+    customerName?: string;
+    equipmentModel?: string;
+    serialNumber?: string;
+    department?: string;
+    callType?: string;
+    priority?: string;
+    issueDescription?: string;
+    workType?: string;
+  }) => {
+    try {
+      if (!assignmentData.engineerEmail) {
+        const found = users.find((u) => u.name.toUpperCase() === (assignmentData.engineerName || '').toUpperCase());
+        if (found?.email) {
+          assignmentData.engineerEmail = found.email;
+        }
+      }
+
+      if (!assignmentData.engineerEmail) return;
+
+      await fetch('/api/notifications/work-assigned', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assignmentData),
+      });
+    } catch (err) {
+      console.warn('Work assignment notification note:', err);
+    }
+  };
+
   // Customer actions
   const addCustomer = (custData: Omit<Customer, 'id' | 'createdAt'>): Customer => {
     const newCust: Customer = {
@@ -921,14 +1014,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCustomers((prev) => [newCust, ...prev.filter((c) => c.name.toUpperCase() !== newCust.name)].sort((a, b) => a.name.localeCompare(b.name)));
 
     const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
+    const webhookUrl = localStorage.getItem('sharq_sheets_webhook_url') || '';
+
+    // Direct Webhook dispatch if configured
+    if (webhookUrl && webhookUrl.startsWith('http')) {
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'append_customer',
+          data: newCust,
+          timestamp: new Date().toISOString(),
+        }),
+      }).catch((err) => console.warn('Customer webhook sync note:', err));
+    }
 
     getAccessToken().then(async (token) => {
       try {
-        // 1. Post to Server Live Customer Registry
+        // 1. Post to Server Live Customer Registry with webhook header
         const resp = await fetch(`/api/customers/add?sheetId=${encodeURIComponent(activeSheetId)}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(webhookUrl ? { 'x-sheets-webhook': webhookUrl } : {}),
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify(newCust),
@@ -945,8 +1053,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             const appended = await appendCustomerToSheet(token, activeSheetId, newCust);
             if (appended) {
-              setSheetsSyncStatus(`Customer "${newCust.name}" saved live to Google Sheet.`);
-              setTimeout(() => setSheetsSyncStatus(null), 3000);
+              setSheetsSyncStatus(`Customer "${newCust.name}" saved live to Google Sheet!`);
+              setTimeout(() => setSheetsSyncStatus(null), 3500);
             }
           } catch (apiErr: any) {
             if (apiErr.message && (apiErr.message.includes('401') || apiErr.message.includes('UNAUTHENTICATED') || apiErr.message.includes('expired'))) {
@@ -954,9 +1062,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setSheetsSyncStatus('Google session expired. Click "Connect" to re-authorize.');
             }
           }
+        } else if (webhookUrl) {
+          setSheetsSyncStatus(`Customer "${newCust.name}" dispatched live to Google Sheet via Webhook!`);
+          setTimeout(() => setSheetsSyncStatus(null), 3500);
         } else {
-          setSheetsSyncStatus(`Customer "${newCust.name}" saved locally. Connect Google to sync live.`);
-          setTimeout(() => setSheetsSyncStatus(null), 3000);
+          setSheetsSyncStatus(`Customer "${newCust.name}" saved locally. Connect Google or enter Apps Script Webhook to sync live.`);
+          setTimeout(() => setSheetsSyncStatus(null), 4000);
         }
       } catch (err: any) {
         console.warn('Auto-save customer notice:', err);
@@ -1147,15 +1258,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAssets((prev) => [newAsset, ...prev.filter((a) => a.serialNumber.toUpperCase() !== newAsset.serialNumber)]);
 
     // Push asset to Server & Google Sheets (Two-Way Live Update)
+    const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
+    const webhookUrl = localStorage.getItem('sharq_sheets_webhook_url') || '';
+
+    // Direct Webhook dispatch if configured
+    if (webhookUrl && webhookUrl.startsWith('http')) {
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'append_asset',
+          data: newAsset,
+          timestamp: new Date().toISOString(),
+        }),
+      }).catch((err) => console.warn('Asset webhook sync note:', err));
+    }
+
     getAccessToken().then(async (token) => {
       try {
-        const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
-
-        // 1. Post to Server Live Registry
+        // 1. Post to Server Live Registry with webhook header
         const resp = await fetch(`/api/assets/add?sheetId=${encodeURIComponent(activeSheetId)}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(webhookUrl ? { 'x-sheets-webhook': webhookUrl } : {}),
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify(newAsset),
@@ -1184,8 +1310,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setSheetsSyncStatus('Google session expired. Click "Connect" to re-authorize.');
             }
           }
+        } else if (webhookUrl) {
+          setSheetsSyncStatus(`Asset S/N "${newAsset.serialNumber}" dispatched live to Google Sheet via Webhook!`);
+          setTimeout(() => setSheetsSyncStatus(null), 4000);
         } else {
-          setSheetsSyncStatus(`Asset S/N "${newAsset.serialNumber}" registered locally. Connect Google Account to sync live with Sheet.`);
+          setSheetsSyncStatus(`Asset S/N "${newAsset.serialNumber}" registered locally. Connect Google or setup Apps Script Webhook to sync live.`);
           setTimeout(() => setSheetsSyncStatus(null), 4000);
         }
       } catch (e: any) {
@@ -1351,14 +1480,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Trigger immediate background sync to Google Sheet
     pushCaseToGoogleSheet(newCase);
 
+    // Notify assigned engineer by email
+    if (newCase.assignedEngineerName) {
+      notifyEngineerWorkAssignment({
+        engineerName: newCase.assignedEngineerName,
+        ticketNumber: newCase.ticketNumber,
+        customerName: newCase.customerName,
+        equipmentModel: newCase.model,
+        serialNumber: newCase.serialNumber,
+        department: newCase.department,
+        callType: newCase.callType,
+        priority: newCase.priority,
+        issueDescription: newCase.issueDescription,
+        workType: 'New Service Call Assigned',
+      });
+    }
+
     return newCase;
   };
 
   const updateCase = (caseId: string, updates: Partial<ServiceCase>) => {
     let updatedCaseObj: ServiceCase | null = null;
+    let oldAssignedEngineer: string | undefined;
+
     setCases((prev) =>
       prev.map((c) => {
         if (c.id === caseId) {
+          oldAssignedEngineer = c.assignedEngineerName;
           const updated: ServiceCase = {
             ...c,
             ...updates,
@@ -1376,6 +1524,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (updatedCaseObj) {
       pushCaseToGoogleSheet(updatedCaseObj);
+
+      // If assigned engineer was changed or re-assigned, notify them
+      const newEngineer = (updatedCaseObj as ServiceCase).assignedEngineerName;
+      if (newEngineer && newEngineer !== oldAssignedEngineer) {
+        notifyEngineerWorkAssignment({
+          engineerName: newEngineer,
+          ticketNumber: (updatedCaseObj as ServiceCase).ticketNumber,
+          customerName: (updatedCaseObj as ServiceCase).customerName,
+          equipmentModel: (updatedCaseObj as ServiceCase).model,
+          serialNumber: (updatedCaseObj as ServiceCase).serialNumber,
+          department: (updatedCaseObj as ServiceCase).department,
+          callType: (updatedCaseObj as ServiceCase).callType,
+          priority: (updatedCaseObj as ServiceCase).priority,
+          issueDescription: (updatedCaseObj as ServiceCase).issueDescription,
+          workType: 'Service Call Assigned to You',
+        });
+      }
     }
   };
 
@@ -1403,6 +1568,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
       }
     });
+
+    // Also push to server endpoint for persistent disk DB & webhook forward
+    fetch('/api/sheets/append-donework', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(newLog),
+    }).catch((e) => console.warn('Server append DoneWork note:', e));
 
     // Also deduct parts if any
     if (workData.partsReplaced && workData.partsReplaced.length > 0) {
@@ -2144,8 +2318,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteUser,
         logout,
         setCurrentUser,
+        sendOtp,
+        verifyOtp,
+        resetPassword,
+        notifyEngineerWorkAssignment,
         googleUser,
-        isGoogleConnected: !!googleUser,
+        isGoogleConnected: Boolean(googleUser && googleToken),
         connectGoogle,
         disconnectGoogle,
         activeTab,
@@ -2222,6 +2400,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshSoftwareLicensesFromExcel,
         clearAllData,
         resetToCleanRealMode,
+        resetDatabase: resetToCleanRealMode,
       }}
     >
       {children}

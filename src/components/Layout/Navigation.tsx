@@ -10,12 +10,23 @@ import {
   FileText,
   FolderGit2,
   Building2,
+  Users,
   LucideIcon,
 } from 'lucide-react';
 import { analyzePpmStatus } from '../../utils/ppmUtils';
 
 interface NavItem {
-  id: 'dashboard' | 'new_case' | 'my_desk' | 'add_asset' | 'ppm' | 'customers' | 'done_work' | 'requests' | 'projects';
+  id:
+    | 'dashboard'
+    | 'new_case'
+    | 'my_desk'
+    | 'add_asset'
+    | 'ppm'
+    | 'customers'
+    | 'done_work'
+    | 'requests'
+    | 'projects'
+    | 'engineer_profiles';
   label: string;
   icon: LucideIcon;
   badge?: number | null;
@@ -24,7 +35,7 @@ interface NavItem {
 }
 
 export const Navigation: React.FC = () => {
-  const { activeTab, setActiveTab, cases, requests, customers, assets, isDarkMode } = useApp();
+  const { activeTab, setActiveTab, cases, requests, customers, assets, isDarkMode, isAdmin, users } = useApp();
 
   const newCasesCount = cases.filter((c) => c.status === 'New').length;
   const pendingRequestsCount = requests.filter((r) => r.status === 'Pending').length;
@@ -100,6 +111,18 @@ export const Navigation: React.FC = () => {
       activeColor: 'bg-purple-600 text-white shadow-2xs',
       iconColor: 'text-purple-600',
     },
+    ...(isAdmin
+      ? [
+          {
+            id: 'engineer_profiles' as const,
+            label: 'ENGINEER PROFILES',
+            icon: Users,
+            badge: users.filter((u) => u.role !== 'Admin').length || 10,
+            activeColor: 'bg-blue-700 text-white shadow-2xs',
+            iconColor: 'text-blue-600',
+          },
+        ]
+      : []),
   ];
 
   return (

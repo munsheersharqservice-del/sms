@@ -20,13 +20,15 @@ import {
   Sparkles,
   ArrowLeft,
   KeyRound,
+  RotateCcw,
+  CheckCircle,
 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { login, signup, users } = useApp();
+  const { login, signup, users, sendOtp, verifyOtp, resetPassword } = useApp();
 
-  // Mode: 'login' | 'signup' | 'admin'
-  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'admin'>('login');
+  // Mode: 'login' | 'signup' | 'admin' | 'forgot_password'
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'admin' | 'forgot_password'>('login');
 
   // Login form state - starts strictly empty
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -34,7 +36,7 @@ export const LoginPage: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // Sign up form state - starts strictly empty
+  // Sign up form state
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupDepartment, setSignupDepartment] = useState<Department>('Both');
@@ -43,6 +45,18 @@ export const LoginPage: React.FC = () => {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
   const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [signupStep, setSignupStep] = useState<'fill_form' | 'verify_otp'>('fill_form');
+  const [signupOtp, setSignupOtp] = useState('');
+  const [signupDebugOtp, setSignupDebugOtp] = useState<string | null>(null);
+
+  // Forgot Password state
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
+  const [forgotStep, setForgotStep] = useState<'request_otp' | 'verify_and_reset'>('request_otp');
+  const [forgotDebugOtp, setForgotDebugOtp] = useState<string | null>(null);
 
   // Admin Separate Mode state - starts strictly empty
   const [adminUsername, setAdminUsername] = useState('ADMIN');
@@ -87,8 +101,8 @@ export const LoginPage: React.FC = () => {
     }, 250);
   };
 
-  // Handle Engineer Sign Up (Registration)
-  const handleSignupSubmit = (e: React.FormEvent) => {
+  // Step 1: Send OTP to Engineer Email for Sign Up
+  const handleInitiateSignupOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
@@ -126,22 +140,127 @@ export const LoginPage: React.FC = () => {
     }
 
     setIsLoading(true);
+    const otpResult = await sendOtp(cleanEmail, 'signup', cleanName);
+    setIsLoading(false);
 
-    setTimeout(() => {
-      signup({
-        name: cleanName,
-        email: cleanEmail,
-        role: 'Service Engineer',
-        department: signupDepartment,
-        phone: signupPhone.trim(),
-        title: signupTitle.trim(),
-        password: signupPassword,
-        bio: `${signupDepartment} Service Engineer at Sharq Medical Supply.`,
-      });
+    if (otpResult.success) {
+      setSignupStep('verify_otp');
+      if (otpResult.debugOtp) setSignupDebugOtp(otpResult.debugOtp);
+      setSuccessMsg(`A 6-digit OTP code has been sent to ${cleanEmail}. Enter it below to register.`);
+    } else {
+      setErrorMsg(otpResult.message || 'Failed to dispatch verification code to email.');
+    }
+  };
 
+  // Step 2: Verify OTP and Complete Engineer Registration
+  const handleVerifyAndCompleteSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const cleanEmail = signupEmail.trim().toLowerCase();
+    const cleanName = signupName.trim().toUpperCase();
+    const enteredOtp = signupOtp.trim();
+
+    if (!enteredOtp || enteredOtp.length < 4) {
+      setErrorMsg('Please enter the verification code received via email.');
+      return;
+    }
+
+    setIsLoading(true);
+    const verifyResult = await verifyOtp(cleanEmail, enteredOtp);
+
+    if (!verifyResult.success) {
       setIsLoading(false);
-      setSuccessMsg(`Account created for Eng. ${cleanName}! Redirecting...`);
-    }, 300);
+      setErrorMsg(verifyResult.message || 'Invalid or expired OTP code.');
+      return;
+    }
+
+    signup({
+      name: cleanName,
+      email: cleanEmail,
+      role: 'Service Engineer',
+      department: signupDepartment,
+      phone: signupPhone.trim(),
+      title: signupTitle.trim(),
+      password: signupPassword,
+      bio: `${signupDepartment} Service Engineer at Sharq Medical Supply.`,
+    });
+
+    setIsLoading(false);
+    setSuccessMsg(`Verification successful! Account created for Eng. ${cleanName}. Welcome aboard!`);
+  };
+
+  // Step 1: Send OTP for Password Reset
+  const handleSendForgotOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const email = forgotEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+
+    setIsLoading(true);
+    const result = await sendOtp(email, 'reset_password');
+    setIsLoading(false);
+
+    if (result.success) {
+      setForgotStep('verify_and_reset');
+      if (result.debugOtp) setForgotDebugOtp(result.debugOtp);
+      setSuccessMsg(`OTP verification code sent to ${email}. Please check your email.`);
+    } else {
+      setErrorMsg(result.message || 'Failed to send OTP code.');
+    }
+  };
+
+  // Step 2: Verify OTP and Apply New Password
+  const handleResetPasswordWithOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const email = forgotEmail.trim().toLowerCase();
+    const otp = forgotOtp.trim();
+    const newPass = forgotNewPassword.trim();
+    const confirmPass = forgotConfirmPassword.trim();
+
+    if (!otp) {
+      setErrorMsg('Please enter the 6-digit OTP code.');
+      return;
+    }
+
+    if (!newPass || newPass.length < 3) {
+      setErrorMsg('New password must be at least 3 characters long.');
+      return;
+    }
+
+    if (newPass !== confirmPass) {
+      setErrorMsg('Passwords do not match. Please verify.');
+      return;
+    }
+
+    setIsLoading(true);
+    const resetResult = await resetPassword(email, otp, newPass);
+    setIsLoading(false);
+
+    if (resetResult.success) {
+      setSuccessMsg('Your password has been successfully reset! You can now log in.');
+      setTimeout(() => {
+        setAuthMode('login');
+        setLoginIdentifier(email);
+        setLoginPassword(newPass);
+        setForgotStep('request_otp');
+        setForgotOtp('');
+        setForgotNewPassword('');
+        setForgotConfirmPassword('');
+        setForgotDebugOtp(null);
+      }, 1500);
+    } else {
+      setErrorMsg(resetResult.message || 'Failed to reset password. Please check your OTP code.');
+    }
   };
 
   // Handle Separate Administrator Login
@@ -239,8 +358,197 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {/* VIEW 1: REGULAR LOGIN & SIGNIN (BEFORE ONE LOGIN & SIGNUP TABS) */}
-          {authMode !== 'admin' ? (
+          {/* VIEW: FORGOT PASSWORD WITH OTP RESET */}
+          {authMode === 'forgot_password' ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-lg bg-[#1D3557]/10 text-[#1D3557] flex items-center justify-center">
+                    <KeyRound className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-[#1D3557] uppercase tracking-wide">
+                      PASSWORD RECOVERY (OTP)
+                    </h3>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Reset your password with email verification
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('login');
+                    setErrorMsg('');
+                    setSuccessMsg('');
+                  }}
+                  className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              </div>
+
+              {forgotStep === 'request_otp' ? (
+                <form onSubmit={handleSendForgotOtp} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#212529] mb-1.5">
+                      Registered Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        required
+                        autoFocus
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        placeholder="Enter your registered engineer email"
+                        className="w-full pl-10 pr-4 py-2.5 bg-[#F8F9FA] border border-slate-200 rounded-xl text-[#212529] text-xs sm:text-sm font-semibold focus:bg-white focus:border-[#1D3557] focus:ring-2 focus:ring-[#1D3557]/15 focus:outline-hidden transition-all"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      We will send a 6-digit One-Time Password (OTP) code to verify your identity.
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3 bg-[#1D3557] hover:bg-[#152741] text-white rounded-xl font-black text-xs sm:text-sm tracking-wider shadow-md hover:shadow-lg flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <KeyRound className="w-4 h-4" />
+                        <span>SEND 6-DIGIT OTP CODE</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('login');
+                        setErrorMsg('');
+                        setSuccessMsg('');
+                      }}
+                      className="text-xs font-bold text-slate-500 hover:text-[#1D3557] cursor-pointer"
+                    >
+                      ← Back to Log In
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleResetPasswordWithOtp} className="space-y-4">
+                  <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+                    <p className="text-xs text-blue-900 font-semibold">
+                      OTP sent to: <span className="font-bold">{forgotEmail}</span>
+                    </p>
+                  </div>
+
+                  {forgotDebugOtp && (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs font-mono">
+                      <span>Quick Test OTP: </span>
+                      <strong className="tracking-widest font-black text-amber-950">{forgotDebugOtp}</strong>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#212529] mb-1.5">
+                      Enter 6-Digit OTP Code
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      autoFocus
+                      value={forgotOtp}
+                      onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="000000"
+                      className="w-full text-center tracking-[0.4em] py-2.5 bg-[#F8F9FA] border border-slate-300 rounded-xl text-[#1D3557] text-lg font-black font-mono focus:bg-white focus:border-[#1D3557] focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#212529] mb-1.5">
+                      New Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type={showForgotNewPassword ? 'text' : 'password'}
+                        required
+                        value={forgotNewPassword}
+                        onChange={(e) => setForgotNewPassword(e.target.value)}
+                        placeholder="Enter your new password"
+                        className="w-full pl-10 pr-10 py-2.5 bg-[#F8F9FA] border border-slate-200 rounded-xl text-[#212529] text-xs sm:text-sm font-medium focus:bg-white focus:border-[#1D3557] focus:outline-hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer p-1"
+                      >
+                        {showForgotNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#212529] mb-1.5">
+                      Confirm New Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type={showForgotNewPassword ? 'text' : 'password'}
+                        required
+                        value={forgotConfirmPassword}
+                        onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                        placeholder="Re-enter your new password"
+                        className="w-full pl-10 pr-10 py-2.5 bg-[#F8F9FA] border border-slate-200 rounded-xl text-[#212529] text-xs sm:text-sm font-medium focus:bg-white focus:border-[#1D3557] focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || forgotOtp.length < 4}
+                    className="w-full py-3 bg-[#4CAF50] hover:bg-[#43a047] text-white rounded-xl font-black text-xs sm:text-sm tracking-wider shadow-md hover:shadow-lg flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4" />
+                        <span>RESET PASSWORD & LOG IN</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setForgotStep('request_otp')}
+                      className="text-slate-500 hover:text-slate-800 font-bold cursor-pointer"
+                    >
+                      ← Change email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendForgotOtp}
+                      disabled={isLoading}
+                      className="text-[#1D3557] hover:underline font-bold cursor-pointer"
+                    >
+                      Resend OTP code
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          ) : authMode !== 'admin' ? (
             <div>
               {/* Dual Tabs: Log In vs Sign Up */}
               <div className="flex border-b border-slate-200 mb-5">
@@ -347,6 +655,20 @@ export const LoginPage: React.FC = () => {
                         Remember login
                       </span>
                     </label>
+
+                    <button
+                      type="button"
+                      id="btn-forgot-password-link"
+                      onClick={() => {
+                        setAuthMode('forgot_password');
+                        setForgotStep('request_otp');
+                        setErrorMsg('');
+                        setSuccessMsg('');
+                      }}
+                      className="text-xs font-bold text-[#1D3557] hover:underline cursor-pointer"
+                    >
+                      Forgot password?
+                    </button>
                   </div>
 
                   {/* Primary Action: Deep Navy #1D3557 */}
@@ -369,9 +691,9 @@ export const LoginPage: React.FC = () => {
                 </form>
               )}
 
-              {/* TAB 2: SIGN UP FORM */}
-              {authMode === 'signup' && (
-                <form onSubmit={handleSignupSubmit} className="space-y-3.5">
+              {/* TAB 2: SIGN UP FORM WITH OTP VERIFICATION */}
+              {authMode === 'signup' && signupStep === 'fill_form' && (
+                <form onSubmit={handleInitiateSignupOtp} className="space-y-3.5">
                   <div>
                     <label className="block text-xs font-bold text-[#212529] mb-1">
                       Full Name
@@ -391,7 +713,7 @@ export const LoginPage: React.FC = () => {
 
                   <div>
                     <label className="block text-xs font-bold text-[#212529] mb-1">
-                      Email Address
+                      Email Address (For Work Notifications & OTP)
                     </label>
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -498,12 +820,80 @@ export const LoginPage: React.FC = () => {
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <>
-                        <UserPlus className="w-4 h-4" />
-                        <span>CREATE ACCOUNT & SIGN IN</span>
+                        <KeyRound className="w-4 h-4" />
+                        <span>SEND EMAIL VERIFICATION CODE (OTP)</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
                   </button>
+                </form>
+              )}
+
+              {/* TAB 2 STEP 2: VERIFY OTP CODE FOR ENGINEER REGISTRATION */}
+              {authMode === 'signup' && signupStep === 'verify_otp' && (
+                <form onSubmit={handleVerifyAndCompleteSignup} className="space-y-4">
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                    <p className="text-xs font-bold text-[#1D3557]">Email Verification</p>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      Registering: <span className="font-bold text-[#212529]">{signupName}</span> ({signupEmail})
+                    </p>
+                  </div>
+
+                  {signupDebugOtp && (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-mono">
+                      <span>Quick Test OTP: </span>
+                      <strong className="tracking-widest font-black text-amber-950">{signupDebugOtp}</strong>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#212529] mb-1.5">
+                      Enter 6-Digit Verification Code (OTP)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      autoFocus
+                      value={signupOtp}
+                      onChange={(e) => setSignupOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="000000"
+                      className="w-full text-center tracking-[0.4em] py-3 bg-[#F8F9FA] border border-slate-300 rounded-xl text-[#1D3557] text-lg font-black font-mono focus:bg-white focus:border-[#1D3557] focus:outline-hidden"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || signupOtp.length < 4}
+                    className="w-full py-3 bg-[#4CAF50] hover:bg-[#43a047] text-white font-black text-xs sm:text-sm rounded-xl shadow-md flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4" />
+                        <span>VERIFY & COMPLETE REGISTRATION</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setSignupStep('fill_form')}
+                      className="text-slate-500 hover:text-slate-800 font-bold cursor-pointer"
+                    >
+                      ← Edit details
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleInitiateSignupOtp}
+                      disabled={isLoading}
+                      className="text-[#1D3557] hover:underline font-bold cursor-pointer"
+                    >
+                      Resend OTP code
+                    </button>
+                  </div>
                 </form>
               )}
 
