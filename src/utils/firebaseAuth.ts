@@ -91,6 +91,7 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     cachedUser = result.user;
     if (typeof window !== 'undefined') {
       localStorage.setItem('sharq_google_access_token', credential.accessToken);
+      localStorage.setItem('sharq_google_token_time', Date.now().toString());
     }
     notifyListeners();
     return { user: result.user, accessToken: cachedAccessToken };
@@ -103,6 +104,17 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
+  if (typeof window !== 'undefined') {
+    const timeStr = localStorage.getItem('sharq_google_token_time');
+    if (timeStr) {
+      const issuedAt = parseInt(timeStr, 10);
+      // Google tokens expire in 3600 seconds. Expire after 55 minutes (3300 seconds)
+      if (!isNaN(issuedAt) && Date.now() - issuedAt > 55 * 60 * 1000) {
+        handleAuthExpired('Token exceeded 55 minutes expiration window');
+        return null;
+      }
+    }
+  }
   if (cachedAccessToken) return cachedAccessToken;
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem('sharq_google_access_token');
@@ -134,8 +146,17 @@ export const clearCachedToken = () => {
   cachedAccessToken = null;
   if (typeof window !== 'undefined') {
     localStorage.removeItem('sharq_google_access_token');
+    localStorage.removeItem('sharq_google_token_time');
   }
   notifyListeners();
+};
+
+export const handleAuthExpired = (reason = 'Google session expired. Please re-authenticate.') => {
+  console.warn('Google Auth Expired:', reason);
+  clearCachedToken();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('google-auth-expired', { detail: { reason } }));
+  }
 };
 
 export const getOrRefreshAccessToken = async (forceFresh = false): Promise<string> => {

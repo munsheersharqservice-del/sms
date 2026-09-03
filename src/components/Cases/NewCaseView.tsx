@@ -140,36 +140,34 @@ export const NewCaseView: React.FC = () => {
     c.name.toLowerCase().includes(customerInput.toLowerCase())
   );
 
-  // Toggle to show only matched equipment for selected customer vs all
-  const [showOnlyMatchedEquipment, setShowOnlyMatchedEquipment] = useState(true);
+  // Check if asset belongs to customer
+  const isAssetForCustomer = (a: Asset, custName: string) => {
+    if (!custName || !custName.trim()) return false;
+    const c = custName.toLowerCase().trim();
+    const ac = (a.customerName || '').toLowerCase().trim();
+    if (ac === c) return true;
+    if (ac.includes(c) || c.includes(ac)) return true;
+    const custTokens = c.replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter((t) => t.length > 2);
+    return custTokens.length > 0 && custTokens.some((tok) => ac.includes(tok));
+  };
 
-  // Assets Filter list (fuzzy and smart token matching for selected customer)
-  const filteredAssets = assets.filter((a) => {
-    const q = assetSearchInput.toLowerCase().trim();
-    const matchesQuery =
-      !q ||
-      a.serialNumber.toLowerCase().includes(q) ||
-      a.model.toLowerCase().includes(q) ||
-      a.customerName.toLowerCase().includes(q) ||
-      a.manufacturer.toLowerCase().includes(q) ||
-      (a.assetNumber && a.assetNumber.toLowerCase().includes(q));
+  // Only assets under the selected customer are shown - never show all assets!
+  const customerMatchedAssets = selectedCustomer
+    ? assets.filter((a) => isAssetForCustomer(a, selectedCustomer))
+    : [];
 
-    if (selectedCustomer && showOnlyMatchedEquipment) {
-      const custNorm = selectedCustomer.toLowerCase().trim();
-      const assetCustNorm = (a.customerName || '').toLowerCase().trim();
-      const directMatch =
-        assetCustNorm === custNorm ||
-        assetCustNorm.includes(custNorm) ||
-        custNorm.includes(assetCustNorm);
-      
-      const custTokens = custNorm.replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter((t) => t.length > 2);
-      const tokenMatch = custTokens.some((tok) => assetCustNorm.includes(tok));
-
-      return matchesQuery && (directMatch || tokenMatch);
-    }
-
-    return matchesQuery;
-  });
+  const filteredAssets = selectedCustomer
+    ? customerMatchedAssets.filter((a) => {
+        const q = assetSearchInput.toLowerCase().trim();
+        if (!q) return true;
+        return (
+          a.serialNumber.toLowerCase().includes(q) ||
+          a.model.toLowerCase().includes(q) ||
+          a.manufacturer.toLowerCase().includes(q) ||
+          (a.assetNumber && a.assetNumber.toLowerCase().includes(q))
+        );
+      })
+    : [];
 
   const handleSelectCustomer = (custName: string) => {
     setSelectedCustomer(custName);
@@ -184,25 +182,10 @@ export const NewCaseView: React.FC = () => {
       if (found.department) setDepartment(found.department);
     }
 
-    // Check if the current asset belongs to the new customer
-    if (selectedAsset) {
-      const assetBelongsToCust = selectedAsset.customerName.toLowerCase().includes(custName.toLowerCase()) ||
-        custName.toLowerCase().includes(selectedAsset.customerName.toLowerCase());
-      if (!assetBelongsToCust) {
-        // Try finding if the selected customer has an asset with the same serial number
-        const matchingForNewCust = assets.find(
-          (a) =>
-            a.serialNumber.toLowerCase() === selectedAsset.serialNumber.toLowerCase() &&
-            (a.customerName.toLowerCase().includes(custName.toLowerCase()) ||
-              custName.toLowerCase().includes(a.customerName.toLowerCase()))
-        );
-        if (matchingForNewCust) {
-          setSelectedAsset(matchingForNewCust);
-          setAssetSearchInput(matchingForNewCust.serialNumber);
-        } else {
-          setSelectedAsset(null);
-        }
-      }
+    // Strictly enforce: if current asset does not belong to the selected customer, clear it!
+    if (selectedAsset && !isAssetForCustomer(selectedAsset, custName)) {
+      setSelectedAsset(null);
+      setAssetSearchInput('');
     }
   };
 
@@ -555,20 +538,6 @@ export const NewCaseView: React.FC = () => {
                     <span>Hardware Asset Link (Optional)</span>
                   </label>
                   <div className="flex items-center space-x-2">
-                    {selectedCustomer && (
-                      <button
-                        type="button"
-                        onClick={() => setShowOnlyMatchedEquipment(!showOnlyMatchedEquipment)}
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors cursor-pointer ${
-                          showOnlyMatchedEquipment
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                            : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
-                        }`}
-                        title="Toggle between showing only matched equipment for this customer or all equipment"
-                      >
-                        {showOnlyMatchedEquipment ? '✓ Matched Only' : 'Showing All'}
-                      </button>
-                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -586,28 +555,47 @@ export const NewCaseView: React.FC = () => {
                 {/* Quick Pick Equipment Dropdown from Master DB */}
                 <div className="space-y-2 mb-2">
                   <div className="flex items-center justify-between text-[11px] text-slate-600 font-bold">
-                    <span>Quick Select Equipment ({filteredAssets.length} Available):</span>
+                    <span>
+                      {selectedCustomer
+                        ? `Customer Assets (${filteredAssets.length} Available):`
+                        : 'Select Customer First to View Assets:'}
+                    </span>
                     {selectedCustomer && (
-                      <span className="text-orange-600 font-mono text-[10px]">
-                        Customer: {selectedCustomer}
+                      <span className="text-orange-600 font-mono text-[10px] truncate max-w-[200px]">
+                        {selectedCustomer}
                       </span>
                     )}
                   </div>
                   <select
                     value={selectedAsset?.id || ''}
+                    disabled={!selectedCustomer || customerMatchedAssets.length === 0}
                     onChange={(e) => {
                       const ast = assets.find((a) => a.id === e.target.value);
                       if (ast) handleSelectAsset(ast);
                       else handleClearAsset();
                     }}
-                    className="w-full bg-white text-slate-900 border border-orange-300 p-2.5 rounded-lg text-xs font-bold font-mono focus:ring-2 focus:ring-orange-300 outline-none cursor-pointer"
+                    className={`w-full bg-white text-slate-900 border p-2.5 rounded-lg text-xs font-bold font-mono focus:ring-2 focus:ring-orange-300 outline-none ${
+                      !selectedCustomer
+                        ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : customerMatchedAssets.length === 0
+                        ? 'border-amber-200 bg-amber-50/50 text-amber-800'
+                        : 'border-orange-300 cursor-pointer'
+                    }`}
                   >
-                    <option value="">-- Choose Equipment from List ({filteredAssets.length}) --</option>
-                    {filteredAssets.map((ast) => (
-                      <option key={`ast-opt-${ast.id}`} value={ast.id}>
-                        {ast.serialNumber} | {ast.model} ({ast.manufacturer}) - {ast.customerName}
-                      </option>
-                    ))}
+                    {!selectedCustomer ? (
+                      <option value="">-- Please Select Master Customer First --</option>
+                    ) : customerMatchedAssets.length === 0 ? (
+                      <option value="">-- No Equipment Registered for {selectedCustomer} --</option>
+                    ) : (
+                      <>
+                        <option value="">-- Choose Equipment for {selectedCustomer} ({filteredAssets.length}) --</option>
+                        {filteredAssets.map((ast) => (
+                          <option key={`ast-opt-${ast.id}`} value={ast.id}>
+                            {ast.serialNumber} | {ast.model} ({ast.manufacturer})
+                          </option>
+                        ))}
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -623,9 +611,9 @@ export const NewCaseView: React.FC = () => {
                     onFocus={() => setShowAssetDropdown(true)}
                     className="w-full bg-white text-black border border-slate-300 p-3 pr-8 rounded-lg text-sm font-bold font-mono focus:ring-2 focus:ring-orange-200 outline-none transition uppercase placeholder-slate-400"
                     placeholder={
-                      selectedCustomer && showOnlyMatchedEquipment
-                        ? `Or Search ${selectedCustomer} Equipment...`
-                        : 'Search Serial Number / Model / Customer...'
+                      selectedCustomer
+                        ? `Search ${selectedCustomer} Equipment (S/N, Model)...`
+                        : 'Select Master Customer above first to view equipment...'
                     }
                     autoComplete="off"
                   />
@@ -651,18 +639,22 @@ export const NewCaseView: React.FC = () => {
                     className="search-results-box absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto left-0 divide-y divide-slate-100"
                   >
                     <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-500 uppercase flex justify-between items-center">
-                      <span>Matching Assets ({filteredAssets.length})</span>
-                      {selectedCustomer && (
-                        <button
-                          type="button"
-                          onClick={() => setShowOnlyMatchedEquipment(!showOnlyMatchedEquipment)}
-                          className="text-[9px] text-emerald-700 hover:underline font-bold"
-                        >
-                          {showOnlyMatchedEquipment ? 'Show All Equipment' : 'Show Matched Only'}
-                        </button>
-                      )}
+                      <span>
+                        {selectedCustomer
+                          ? `${selectedCustomer} Equipment (${filteredAssets.length})`
+                          : 'Select Customer First'}
+                      </span>
                     </div>
-                    {filteredAssets.length > 0 ? (
+                    {!selectedCustomer ? (
+                      <div className="p-4 text-center">
+                        <p className="text-xs text-amber-800 font-semibold">
+                          Please select a Master Customer above first.
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          Equipment list strictly displays assets belonging to the selected customer.
+                        </p>
+                      </div>
+                    ) : filteredAssets.length > 0 ? (
                       filteredAssets.map((asset) => (
                         <button
                           key={asset.id}
@@ -692,21 +684,21 @@ export const NewCaseView: React.FC = () => {
                         </button>
                       ))
                     ) : (
-                      <div className="p-3 text-center space-y-1.5">
-                        <p className="text-xs text-slate-500 font-medium">
-                          {selectedCustomer && showOnlyMatchedEquipment
-                            ? `No equipment found matching "${selectedCustomer}"`
-                            : 'No matching equipment found'}
+                      <div className="p-4 text-center space-y-2">
+                        <p className="text-xs text-slate-600 font-medium">
+                          No equipment registered under &quot;{selectedCustomer}&quot; in master database.
                         </p>
-                        {selectedCustomer && showOnlyMatchedEquipment && (
-                          <button
-                            type="button"
-                            onClick={() => setShowOnlyMatchedEquipment(false)}
-                            className="text-xs text-emerald-700 font-bold hover:underline"
-                          >
-                            Click to Search All Equipment ({assets.length})
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAssetSubTab('add');
+                            setActiveTab('add_asset');
+                          }}
+                          className="text-xs text-orange-600 font-bold hover:underline inline-flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Register New Asset for {selectedCustomer}</span>
+                        </button>
                       </div>
                     )}
                   </div>

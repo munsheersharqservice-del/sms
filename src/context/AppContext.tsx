@@ -40,6 +40,7 @@ import {
   SOFTWARE_REGISTRY_GID,
   REQUESTS_SHEET_GID,
   appendCaseToSheet,
+  updateCaseInSheet,
   appendDoneWorkToSheet,
   appendAssetToSheet,
   updateAssetInSheet,
@@ -59,6 +60,8 @@ import {
   googleSignOut,
   subscribeAuth,
   getCurrentGoogleUser,
+  handleAuthExpired,
+  clearCachedToken,
 } from '../utils/firebaseAuth';
 import { User as FirebaseUser } from 'firebase/auth';
 
@@ -93,6 +96,22 @@ interface AppContextType {
   deleteUser: (userId: string) => void;
   logout: () => void;
   setCurrentUser: (user: User) => void;
+  sendOtp: (email: string, purpose?: 'reset_password' | 'signup', name?: string) => Promise<{ success: boolean; message: string; debugOtp?: string }>;
+  verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; message: string }>;
+  resetPassword: (email: string, otp: string, newPass: string) => Promise<{ success: boolean; message: string }>;
+  notifyEngineerWorkAssignment: (assignmentData: {
+    engineerEmail?: string;
+    engineerName?: string;
+    ticketNumber?: string;
+    customerName?: string;
+    equipmentModel?: string;
+    serialNumber?: string;
+    department?: string;
+    callType?: string;
+    priority?: string;
+    issueDescription?: string;
+    workType?: string;
+  }) => Promise<void>;
 
   // Google OAuth connection state
   googleUser: FirebaseUser | null;
@@ -451,10 +470,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return result;
   };
 
-  // 1. Users / Administrator (Strictly Admin only)
+  // 1. Users / Administrator / Registered Engineers
   const [users, setUsers] = useState<User[]>(() => {
+    try {
+      const saved = localStorage.getItem('sharq_v3_users');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const map = new Map<string, User>();
+          INITIAL_USERS.forEach((u) => map.set(u.email.toLowerCase(), u));
+          parsed.forEach((u) => map.set(u.email.toLowerCase(), u));
+          return sanitizeUserList(Array.from(map.values()));
+        }
+      }
+    } catch {}
     return sanitizeUserList(INITIAL_USERS);
   });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sharq_v3_users', JSON.stringify(users));
+    } catch {}
+  }, [users]);
 
   // Current logged in engineer / user - Starts as null so Login Page appears first
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -501,7 +538,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setGoogleUser(user);
       setGoogleToken(token);
     });
-    return () => unsub();
+
+    const handleAuthExpiredEvent = (e: any) => {
+      setGoogleUser(null);
+      setGoogleToken(null);
+      setSheetsSyncStatus('Google session expired. Click "Connect" to re-authorize live syncing.');
+    };
+    window.addEventListener('google-auth-expired', handleAuthExpiredEvent);
+
+    return () => {
+      unsub();
+      window.removeEventListener('google-auth-expired', handleAuthExpiredEvent);
+    };
   }, []);
 
   const connectGoogle = async (): Promise<boolean> => {
@@ -512,6 +560,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setGoogleToken(res.accessToken);
         setSheetsSyncStatus(`Google Connected: ${res.user.email}`);
         setTimeout(() => setSheetsSyncStatus(null), 4000);
+
+        // If no user is currently logged into portal, log them in via Google profile
+        if (!currentUser) {
+          const userEmail = (res.user.email || '').toLowerCase();
+          const match = users.find((u) => u.email.toLowerCase() === userEmail);
+          if (match) {
+            setCurrentUser(match);
+            localStorage.setItem('sharq_remember_login', 'true');
+            localStorage.setItem('sharq_v3_current_user', JSON.stringify(match));
+          } else {
+            const isGoogleAdmin = userEmail.includes('admin');
+            const googleEngineer: User = {
+              id: `usr-g-${Date.now()}`,
+              name: (res.user.displayName || userEmail.split('@')[0] || 'ENGINEER').toUpperCase(),
+              email: res.user.email || '',
+              role: isGoogleAdmin ? 'Admin' : 'Service Engineer',
+              department: 'Both',
+              createdAt: new Date().toISOString().split('T')[0],
+              password: '123',
+              bio: `Field Engineer authenticated via Google.`,
+            };
+            setUsers((prev) => [...prev.filter((u) => u.email.toLowerCase() !== userEmail), googleEngineer]);
+            setCurrentUser(googleEngineer);
+            localStorage.setItem('sharq_remember_login', 'true');
+            localStorage.setItem('sharq_v3_current_user', JSON.stringify(googleEngineer));
+          }
+        }
+
         return true;
       }
       return false;
@@ -539,75 +615,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [assetSubTab, setAssetSubTab] = useState<'search' | 'add' | 'software_dir' | 'software_reg' | 'customers' | 'manufacturers'>('search');
   const [selectedAssetForCase, setSelectedAssetForCase] = useState<Asset | null>(null);
 
-  // 2. Master Customers (Clean Slate in Real Mode)
-  const [customers, setCustomers] = useState<Customer[]>(() => {
-    const saved = localStorage.getItem('sharq_v3_customers');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return sanitizeCustomerList(parsed);
-        }
-      } catch {}
-    }
-    return sanitizeCustomerList(INITIAL_CUSTOMERS);
-  });
+  // 2. Master Customers (Single Source of Truth: Live Database / Excel)
+  const [customers, setCustomers] = useState<Customer[]>([]);
 
-  // 3. Master Manufacturers & Models (Clean Slate in Real Mode)
-  const [manufacturerModels, setManufacturerModels] = useState<ManufacturerModel[]>(() => {
-    const saved = localStorage.getItem('sharq_v3_manufacturer_models');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return sanitizeManufacturerModelList(parsed);
-        }
-      } catch {}
-    }
-    return sanitizeManufacturerModelList(INITIAL_MANUFACTURERS_MODELS);
-  });
+  // 3. Master Manufacturers & Models (Single Source of Truth: Live Database / Excel)
+  const [manufacturerModels, setManufacturerModels] = useState<ManufacturerModel[]>([]);
 
-  // 4. Master Spare Parts (Clean Slate in Real Mode)
-  const [spareParts, setSpareParts] = useState<SparePartItem[]>(() => {
-    const saved = localStorage.getItem('sharq_v3_spare_parts');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // 4. Master Spare Parts (Single Source of Truth: Live Database / Excel)
+  const [spareParts, setSpareParts] = useState<SparePartItem[]>([]);
 
-  // 5. Master Software Licenses (Clean Slate in Real Mode)
-  const [softwareLicenses, setSoftwareLicenses] = useState<SoftwareLicense[]>(() => {
-    const saved = localStorage.getItem('sharq_v3_software_licenses');
-    return saved ? sanitizeSoftwareLicenseList(JSON.parse(saved)) : [];
-  });
+  // 5. Master Software Licenses (Single Source of Truth: Live Database / Excel)
+  const [softwareLicenses, setSoftwareLicenses] = useState<SoftwareLicense[]>([]);
 
-  // 6. Assets / Equipment (Clean Slate in Real Mode)
-  const [assets, setAssets] = useState<Asset[]>(() => {
-    const saved = localStorage.getItem('sharq_v3_assets');
-    return saved ? sanitizeAssetList(JSON.parse(saved)) : [];
-  });
+  // 6. Assets / Equipment (Single Source of Truth: Live Database / Excel)
+  const [assets, setAssets] = useState<Asset[]>([]);
 
-  // 7. Service Cases (Clean Slate in Real Mode)
-  const [cases, setCases] = useState<ServiceCase[]>(() => {
-    const saved = localStorage.getItem('sharq_v3_cases');
-    return saved ? sanitizeCaseList(JSON.parse(saved)) : [];
-  });
+  // 7. Service Cases (Single Source of Truth: Live Database / Excel)
+  const [cases, setCases] = useState<ServiceCase[]>([]);
 
-  // 8. Done Work Logs (Clean Slate in Real Mode)
-  const [doneWorkLogs, setDoneWorkLogs] = useState<DoneWorkLog[]>(() => {
-    const saved = localStorage.getItem('sharq_v3_done_work');
-    return saved ? sanitizeDoneWorkList(JSON.parse(saved)) : [];
-  });
+  // 8. Done Work Logs (Single Source of Truth: Live Database / Excel)
+  const [doneWorkLogs, setDoneWorkLogs] = useState<DoneWorkLog[]>([]);
 
-  // 9. Requisitions (Clean Slate in Real Mode)
-  const [requests, setRequests] = useState<RequestItem[]>(() => {
-    const saved = localStorage.getItem('sharq_v3_requests');
-    return saved ? sanitizeRequestList(JSON.parse(saved)) : [];
-  });
+  // 9. Requisitions (Single Source of Truth: Live Database / Excel)
+  const [requests, setRequests] = useState<RequestItem[]>([]);
 
-  // 10. Projects (Clean Slate in Real Mode)
-  const [projects, setProjects] = useState<ServiceProject[]>(() => {
-    const saved = localStorage.getItem('sharq_v3_projects');
-    return saved ? sanitizeProjectList(JSON.parse(saved)) : [];
-  });
+  // 10. Projects (Single Source of Truth: Live Database / Excel)
+  const [projects, setProjects] = useState<ServiceProject[]>([]);
 
 
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
@@ -660,42 +693,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.removeItem('sharq_v3_current_user');
     }
   }, [currentUser]);
-
-  useEffect(() => {
-    localStorage.setItem('sharq_v3_customers', JSON.stringify(customers));
-  }, [customers]);
-
-  useEffect(() => {
-    localStorage.setItem('sharq_v3_spare_parts', JSON.stringify(spareParts));
-  }, [spareParts]);
-
-  useEffect(() => {
-    localStorage.setItem('sharq_v3_software_licenses', JSON.stringify(softwareLicenses));
-  }, [softwareLicenses]);
-
-  useEffect(() => {
-    localStorage.setItem('sharq_v3_assets', JSON.stringify(assets));
-  }, [assets]);
-
-  useEffect(() => {
-    localStorage.setItem('sharq_v3_cases', JSON.stringify(cases));
-  }, [cases]);
-
-  useEffect(() => {
-    localStorage.setItem('sharq_v3_done_work', JSON.stringify(doneWorkLogs));
-  }, [doneWorkLogs]);
-
-  useEffect(() => {
-    localStorage.setItem('sharq_v3_requests', JSON.stringify(requests));
-  }, [requests]);
-
-  useEffect(() => {
-    localStorage.setItem('sharq_v3_projects', JSON.stringify(projects));
-  }, [projects]);
-
-  useEffect(() => {
-    localStorage.setItem('sharq_v3_manufacturer_models', JSON.stringify(manufacturerModels));
-  }, [manufacturerModels]);
 
   // Derived unique manufacturer names list
   const manufacturers = useMemo(() => {
@@ -921,26 +918,135 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       name: custData.name.trim().toUpperCase(),
       createdAt: new Date().toISOString(),
     };
-    setCustomers((prev) => [newCust, ...prev].sort((a, b) => a.name.localeCompare(b.name)));
+    setCustomers((prev) => [newCust, ...prev.filter((c) => c.name.toUpperCase() !== newCust.name)].sort((a, b) => a.name.localeCompare(b.name)));
+
+    const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
+
+    getAccessToken().then(async (token) => {
+      try {
+        // 1. Post to Server Live Customer Registry
+        const resp = await fetch(`/api/customers/add?sheetId=${encodeURIComponent(activeSheetId)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(newCust),
+        });
+        const resData = await resp.json().catch(() => null);
+        if (resData?.authExpired) {
+          handleAuthExpired('Server indicated Google Auth Expired (401)');
+          setSheetsSyncStatus('Google session expired. Click "Connect" to sync live.');
+          return;
+        }
+
+        // 2. Direct Push to Google Sheets API if logged into Google
+        if (token && activeSheetId) {
+          try {
+            const appended = await appendCustomerToSheet(token, activeSheetId, newCust);
+            if (appended) {
+              setSheetsSyncStatus(`Customer "${newCust.name}" saved live to Google Sheet.`);
+              setTimeout(() => setSheetsSyncStatus(null), 3000);
+            }
+          } catch (apiErr: any) {
+            if (apiErr.message && (apiErr.message.includes('401') || apiErr.message.includes('UNAUTHENTICATED') || apiErr.message.includes('expired'))) {
+              handleAuthExpired('appendCustomerToSheet 401');
+              setSheetsSyncStatus('Google session expired. Click "Connect" to re-authorize.');
+            }
+          }
+        } else {
+          setSheetsSyncStatus(`Customer "${newCust.name}" saved locally. Connect Google to sync live.`);
+          setTimeout(() => setSheetsSyncStatus(null), 3000);
+        }
+      } catch (err: any) {
+        console.warn('Auto-save customer notice:', err);
+      }
+    });
+
     return newCust;
   };
 
   const updateCustomer = (id: string, custData: Partial<Customer>) => {
+    let updatedCust: Customer | undefined;
     setCustomers((prev) =>
-      prev.map((c) =>
-        c.id === id
+      prev.map((c) => {
+        if (c.id === id) {
+          const updated = {
+            ...c,
+            ...custData,
+            name: custData.name ? custData.name.trim().toUpperCase() : c.name,
+          };
+          updatedCust = updated;
+          return updated;
+        }
+        return c;
+      })
+    );
+    if (updatedCust) {
+      fetch('/api/customers/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedCust),
+      }).catch(() => {});
+    }
+  };
+
+  const deleteCustomer = (id: string) => {
+    const cust = customers.find((c) => c.id === id);
+    setCustomers((prev) => prev.filter((c) => c.id !== id));
+    if (cust) {
+      fetch('/api/customers/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name: cust.name }),
+      }).catch(() => {});
+    }
+  };
+
+  // Manufacturer & Models actions
+  const addManufacturerModel = (mfgData: Omit<ManufacturerModel, 'id' | 'createdAt'>): ManufacturerModel => {
+    const newModel: ManufacturerModel = {
+      ...mfgData,
+      id: `mm-${Date.now()}`,
+      manufacturer: mfgData.manufacturer.trim().toUpperCase(),
+      model: mfgData.model.trim().toUpperCase(),
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    setManufacturerModels((prev) => [newModel, ...prev]);
+
+    getAccessToken().then(async (token) => {
+      try {
+        const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
+        if (token && activeSheetId) {
+          await appendManufacturerModelToSheet(token, activeSheetId, newModel);
+          setSheetsSyncStatus(`Model "${newModel.manufacturer} ${newModel.model}" saved to Google Sheet.`);
+          setTimeout(() => setSheetsSyncStatus(null), 3000);
+        }
+      } catch (err) {
+        console.warn('Auto-save manufacturer model notice:', err);
+      }
+    });
+
+    return newModel;
+  };
+
+  const updateManufacturerModel = (id: string, mfgData: Partial<ManufacturerModel>) => {
+    setManufacturerModels((prev) =>
+      prev.map((m) =>
+        m.id === id
           ? {
-              ...c,
-              ...custData,
-              name: custData.name ? custData.name.trim().toUpperCase() : c.name,
+              ...m,
+              ...mfgData,
+              manufacturer: mfgData.manufacturer ? mfgData.manufacturer.trim().toUpperCase() : m.manufacturer,
+              model: mfgData.model ? mfgData.model.trim().toUpperCase() : m.model,
             }
-          : c
+          : m
       )
     );
   };
 
-  const deleteCustomer = (id: string) => {
-    setCustomers((prev) => prev.filter((c) => c.id !== id));
+  const deleteManufacturerModel = (id: string) => {
+    setManufacturerModels((prev) => prev.filter((m) => m.id !== id));
   };
 
   // Spare Parts actions
@@ -1036,9 +1142,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       model: assetData.model.trim().toUpperCase(),
       manufacturer: assetData.manufacturer.trim().toUpperCase(),
       customerName: assetData.customerName.trim().toUpperCase(),
-      createdAt: new Date().toISOString().split('T')[0],
+      createdAt: new Date().toISOString(),
     };
-    setAssets((prev) => [newAsset, ...prev]);
+    setAssets((prev) => [newAsset, ...prev.filter((a) => a.serialNumber.toUpperCase() !== newAsset.serialNumber)]);
 
     // Push asset to Server & Google Sheets (Two-Way Live Update)
     getAccessToken().then(async (token) => {
@@ -1046,24 +1152,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
 
         // 1. Post to Server Live Registry
-        fetch(`/api/assets/add?sheetId=${encodeURIComponent(activeSheetId)}`, {
+        const resp = await fetch(`/api/assets/add?sheetId=${encodeURIComponent(activeSheetId)}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify(newAsset),
-        }).catch((err) => console.warn('Server asset live sync note:', err));
+        });
+        const resData = await resp.json().catch(() => null);
+        if (resData?.authExpired) {
+          handleAuthExpired('Server indicated Google Auth Expired (401)');
+          setSheetsSyncStatus('Google session expired. Click "Connect" to sync live.');
+          return;
+        }
 
         // 2. Push direct to Google Sheets API if logged into Google
         if (token) {
-          const appended = await appendAssetToSheet(token, activeSheetId, newAsset);
-          if (appended) {
-            setSheetsSyncStatus(`Asset S/N "${newAsset.serialNumber}" saved live to Excel & Google Sheet!`);
-            setTimeout(() => setSheetsSyncStatus(null), 4000);
-          } else {
-            setSheetsSyncStatus(`Asset S/N "${newAsset.serialNumber}" saved locally (Google Sheet write pending)`);
-            setTimeout(() => setSheetsSyncStatus(null), 4000);
+          try {
+            const appended = await appendAssetToSheet(token, activeSheetId, newAsset);
+            if (appended) {
+              setSheetsSyncStatus(`Asset S/N "${newAsset.serialNumber}" saved live to Excel & Google Sheet!`);
+              setTimeout(() => setSheetsSyncStatus(null), 4000);
+            } else {
+              setSheetsSyncStatus(`Asset S/N "${newAsset.serialNumber}" saved locally (Google Sheet write pending)`);
+              setTimeout(() => setSheetsSyncStatus(null), 4000);
+            }
+          } catch (apiErr: any) {
+            if (apiErr.message && (apiErr.message.includes('401') || apiErr.message.includes('UNAUTHENTICATED') || apiErr.message.includes('expired'))) {
+              handleAuthExpired('appendAssetToSheet 401');
+              setSheetsSyncStatus('Google session expired. Click "Connect" to re-authorize.');
+            }
           }
         } else {
           setSheetsSyncStatus(`Asset S/N "${newAsset.serialNumber}" registered locally. Connect Google Account to sync live with Sheet.`);
@@ -1157,16 +1276,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      // 1. Direct Google Sheets API v4 append if OAuth token is available
+      // 1. Direct Google Sheets API v4 update/append if OAuth token is available
       if (token) {
         try {
           const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
-          await appendCaseToSheet(token, activeSheetId, caseItem);
+          await updateCaseInSheet(token, activeSheetId, caseItem);
           setSheetsSyncStatus(`Service Call #${caseItem.ticketNumber} saved to Google Sheet (Service_Calls).`);
           setLastSyncedAt(new Date());
         } catch (apiErr: any) {
-          console.warn('Direct Google Sheets append error:', apiErr);
-          setSheetsSyncStatus(`Sheet append note: ${apiErr.message || 'Check edit permissions'}`);
+          console.warn('Direct Google Sheets append/update error:', apiErr);
+          if (apiErr.message && (apiErr.message.includes('401') || apiErr.message.includes('UNAUTHENTICATED') || apiErr.message.includes('expired'))) {
+            handleAuthExpired('pushCaseToGoogleSheet 401');
+            setSheetsSyncStatus('Google session expired. Click "Connect" to re-authorize live syncing.');
+          } else {
+            setSheetsSyncStatus(`Sheet sync note: ${apiErr.message || 'Check edit permissions'}`);
+          }
         }
       }
 
@@ -1231,20 +1355,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCase = (caseId: string, updates: Partial<ServiceCase>) => {
+    let updatedCaseObj: ServiceCase | null = null;
     setCases((prev) =>
-      prev.map((c) =>
-        c.id === caseId
-          ? {
-              ...c,
-              ...updates,
-              customerName: updates.customerName ? updates.customerName.trim().toUpperCase() : c.customerName,
-              serialNumber: updates.serialNumber !== undefined ? updates.serialNumber.trim().toUpperCase() : c.serialNumber,
-              model: updates.model !== undefined ? updates.model.trim().toUpperCase() : c.model,
-              updatedAt: new Date().toISOString(),
-            }
-          : c
-      )
+      prev.map((c) => {
+        if (c.id === caseId) {
+          const updated: ServiceCase = {
+            ...c,
+            ...updates,
+            customerName: updates.customerName ? updates.customerName.trim().toUpperCase() : c.customerName,
+            serialNumber: updates.serialNumber !== undefined ? updates.serialNumber.trim().toUpperCase() : c.serialNumber,
+            model: updates.model !== undefined ? updates.model.trim().toUpperCase() : c.model,
+            updatedAt: new Date().toISOString(),
+          };
+          updatedCaseObj = updated;
+          return updated;
+        }
+        return c;
+      })
     );
+
+    if (updatedCaseObj) {
+      pushCaseToGoogleSheet(updatedCaseObj);
+    }
   };
 
   const updateCaseStatus = (caseId: string, status: CaseStatus) => {
@@ -1521,136 +1653,103 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const data = await fetchLiveDataFromGoogleSheets(activeId);
       if (data) {
-        // 1. Smart merge cases: never wipe out locally created or updated cases!
-        if (Array.isArray(data.cases) && data.cases.length > 0) {
+        // 1. Service Cases: Master Database is Single Source of Truth
+        if (Array.isArray(data.cases)) {
+          const remoteCases = sanitizeCaseList(data.cases);
           setCases((prevCases) => {
-            const remoteMap = new Map<string, ServiceCase>();
-            data.cases.forEach((rc: ServiceCase) => {
-              const k = (rc.ticketNumber || rc.caseNumber || rc.id || '').toUpperCase().trim();
-              if (k) remoteMap.set(k, rc);
+            // Retain any locally created or pending cases that have not yet reached remote
+            const pendingLocals = prevCases.filter((lc) => {
+              const ticketKey = (lc.ticketNumber || lc.caseNumber || '').trim().toUpperCase();
+              const inRemote = remoteCases.some((rc) => 
+                (ticketKey && (rc.ticketNumber || rc.caseNumber || '').trim().toUpperCase() === ticketKey) || 
+                (rc.id && rc.id === lc.id)
+              );
+              return !inRemote;
             });
-
-            const merged: ServiceCase[] = [];
-            const seen = new Set<string>();
-
-            // Keep all local cases, updating only if matching remote
-            prevCases.forEach((local) => {
-              const k = (local.ticketNumber || local.caseNumber || local.id || '').toUpperCase().trim();
-              if (remoteMap.has(k)) {
-                const remote = remoteMap.get(k)!;
-                merged.push({
-                  ...remote,
-                  ...local,
-                  ticketNumber: local.ticketNumber || remote.ticketNumber,
-                });
-                seen.add(k);
-              } else {
-                // Local case not in Google Sheet yet - PRESERVE IT!
-                merged.push(local);
-                seen.add(k);
-              }
-            });
-
-            // Add any remote cases not present locally
-            data.cases.forEach((rc: ServiceCase) => {
-              const k = (rc.ticketNumber || rc.caseNumber || rc.id || '').toUpperCase().trim();
-              if (k && !seen.has(k)) {
-                merged.push(rc);
-                seen.add(k);
-              }
-            });
-
-            return sanitizeCaseList(merged);
+            // Remote cases take absolute priority: manual edits in Excel reflect instantly!
+            return sanitizeCaseList([...pendingLocals, ...remoteCases]);
           });
         }
 
-        // 2. Smart merge assets
-        if (Array.isArray(data.assets) && data.assets.length > 0) {
+        // 2. Assets: Master Database is Single Source of Truth
+        if (Array.isArray(data.assets)) {
+          const remoteAssets = sanitizeAssetList(data.assets);
           setAssets((prevAssets) => {
-            const remoteMap = new Map<string, Asset>();
-            data.assets.forEach((ra: Asset) => {
-              const k = ra.serialNumber.toUpperCase().trim();
-              if (k) remoteMap.set(k, ra);
+            // Retain any locally registered assets that are not yet reflected in remote
+            const pendingLocals = prevAssets.filter((la) => {
+              const serialKey = (la.serialNumber || '').trim().toUpperCase();
+              const inRemote = remoteAssets.some((ra) => 
+                (serialKey && (ra.serialNumber || '').trim().toUpperCase() === serialKey) ||
+                (ra.id && ra.id === la.id)
+              );
+              return !inRemote;
             });
+            return sanitizeAssetList([...pendingLocals, ...remoteAssets]);
+          });
+        }
 
-            const merged: Asset[] = [];
-            const seen = new Set<string>();
-
-            prevAssets.forEach((local) => {
-              const k = local.serialNumber.toUpperCase().trim();
-              if (remoteMap.has(k)) {
-                const remote = remoteMap.get(k)!;
-                merged.push({ ...remote, ...local });
-                seen.add(k);
-              } else {
-                merged.push(local);
-                seen.add(k);
-              }
+        // 3. Customers: Live reflection from Master Database / Excel
+        if (Array.isArray(data.customers)) {
+          const remoteCustomers = sanitizeCustomerList(data.customers);
+          setCustomers((prevCustomers) => {
+            // Retain any locally added customers that have not yet reached remote
+            const pendingLocals = prevCustomers.filter((lc) => {
+              const nameKey = (lc.name || '').trim().toUpperCase();
+              const inRemote = remoteCustomers.some((rc) => 
+                (nameKey && (rc.name || '').trim().toUpperCase() === nameKey) || 
+                (rc.id && rc.id === lc.id)
+              );
+              return !inRemote;
             });
-
-            data.assets.forEach((ra: Asset) => {
-              const k = ra.serialNumber.toUpperCase().trim();
-              if (k && !seen.has(k)) {
-                merged.push(ra);
-                seen.add(k);
-              }
-            });
-
-            return sanitizeAssetList(merged);
+            return sanitizeCustomerList([...pendingLocals, ...remoteCustomers]);
           });
         }
 
-        if (Array.isArray(data.doneWorkLogs) && data.doneWorkLogs.length > 0) {
-          setDoneWorkLogs((prev) => {
-            const remoteMap = new Map<string, DoneWorkLog>();
-            data.doneWorkLogs.forEach((dw: DoneWorkLog) => {
-              const k = (dw.ticketNumber || dw.caseNumber || dw.id).toUpperCase().trim();
-              if (k) remoteMap.set(k, dw);
-            });
-            const merged = [...prev];
-            data.doneWorkLogs.forEach((dw: DoneWorkLog) => {
-              const k = (dw.ticketNumber || dw.caseNumber || dw.id).toUpperCase().trim();
-              if (!prev.some((p) => (p.ticketNumber || p.caseNumber || p.id).toUpperCase().trim() === k)) {
-                merged.push(dw);
-              }
-            });
-            return sanitizeDoneWorkList(merged);
-          });
+        // 4. Done Work Logs
+        if (Array.isArray(data.doneWorkLogs)) {
+          setDoneWorkLogs(sanitizeDoneWorkList(data.doneWorkLogs));
         }
 
-        if (Array.isArray(data.customers) && data.customers.length > 0) {
-          setCustomers((prev) => {
-            return sanitizeCustomerList([...prev, ...data.customers]);
-          });
+        // 5. Users / Engineers (Maintain system Admin login access)
+        if (Array.isArray(data.users)) {
+          const adminUser = INITIAL_USERS[0];
+          const remoteUsers = sanitizeUserList(data.users);
+          const combined = [
+            adminUser,
+            ...remoteUsers.filter((u) => u.email?.toLowerCase() !== adminUser.email.toLowerCase() && u.id !== adminUser.id),
+          ];
+          setUsers(combined);
         }
 
-        if (Array.isArray(data.users) && data.users.length > 0) {
-          setUsers((prev) => {
-            return sanitizeUserList([...prev, ...data.users]);
-          });
+        // 6. Projects
+        if (Array.isArray(data.projects)) {
+          setProjects(sanitizeProjectList(data.projects));
         }
 
-        if (Array.isArray(data.projects) && data.projects.length > 0) {
-          setProjects((prev) => {
-            return sanitizeProjectList([...prev, ...data.projects]);
-          });
+        // 7. Requests
+        if (Array.isArray(data.requests)) {
+          setRequests(sanitizeRequestList(data.requests));
         }
 
-        if (Array.isArray(data.requests) && data.requests.length > 0) {
-          setRequests((prev) => {
-            return sanitizeRequestList([...prev, ...data.requests]);
-          });
-        }
-
-        // Live update Software Licenses directly from Excel (gid=1053502553)
-        if (Array.isArray(data.softwareLicenses) && data.softwareLicenses.length > 0) {
+        // 8. Software Licenses: Live update from Excel
+        if (Array.isArray(data.softwareLicenses)) {
           setSoftwareLicenses(sanitizeSoftwareLicenseList(data.softwareLicenses));
+        }
+
+        // 9. Spare Parts
+        if (Array.isArray(data.spareParts)) {
+          setSpareParts(data.spareParts);
+        }
+
+        // 10. Manufacturers & Models
+        if (Array.isArray(data.manufacturerModels)) {
+          setManufacturerModels(sanitizeManufacturerModelList(data.manufacturerModels));
         }
 
         setLastSyncedAt(new Date());
 
         if (notify) {
-          setSheetsSyncStatus(`Live Link Connected: ${data.cases?.length || 0} Tickets, ${data.assets?.length || 0} Assets, ${data.softwareLicenses?.length || 0} Software Licenses loaded from Google Sheet`);
+          setSheetsSyncStatus(`Master Database Synced: ${data.cases?.length || 0} Tickets, ${data.assets?.length || 0} Assets, ${data.customers?.length || 0} Customers loaded live.`);
         }
       }
     } catch (err: any) {
@@ -1674,15 +1773,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       const liveLic = await fetchLiveSoftwareLicensesFromGoogleSheets(currentSpreadsheetId, SOFTWARE_REGISTRY_GID);
-      if (Array.isArray(liveLic) && liveLic.length > 0) {
-        setSoftwareLicenses(liveLic);
+      if (Array.isArray(liveLic)) {
+        setSoftwareLicenses(sanitizeSoftwareLicenseList(liveLic));
         setLastSyncedAt(new Date());
         if (notify) {
           setSheetsSyncStatus(`Master Excel Registry Live: ${liveLic.length} Software licenses synchronized.`);
-        }
-      } else {
-        if (notify) {
-          setSheetsSyncStatus('Master Excel Registry loaded successfully.');
         }
       }
     } catch (e: any) {
@@ -1698,22 +1793,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // 1. Initial fetch on startup
+  // 1. Initial fetch on startup (clean out any legacy local caches)
   useEffect(() => {
+    localStorage.removeItem('sharq_v3_customers');
+    localStorage.removeItem('sharq_v3_spare_parts');
+    localStorage.removeItem('sharq_v3_software_licenses');
+    localStorage.removeItem('sharq_v3_assets');
+    localStorage.removeItem('sharq_v3_cases');
+    localStorage.removeItem('sharq_v3_done_work');
+    localStorage.removeItem('sharq_v3_requests');
+    localStorage.removeItem('sharq_v3_projects');
+    localStorage.removeItem('sharq_v3_manufacturer_models');
+
     refreshFromGoogleSheets(false);
   }, []);
 
-  // 2. Automatic Real-Time Periodic Polling from Google Sheet
-  // If anyone updates the Google Sheet manually, changes will automatically reflect in the app!
+  // 2. Automatic Real-Time Periodic Polling & Window Focus Trigger from Google Sheet / Excel
+  // When an admin edits the Excel or Google Sheet tab and switches back, changes reflect immediately!
   useEffect(() => {
     if (!autoSyncEnabled) return;
 
-    // Poll every 30 seconds for live updates
+    // Fast poll every 12 seconds for live updates
     const interval = setInterval(() => {
       refreshFromGoogleSheets(false);
-    }, 30000);
+    }, 12000);
 
-    return () => clearInterval(interval);
+    const handleFocus = () => {
+      refreshFromGoogleSheets(false);
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [autoSyncEnabled, currentSpreadsheetId]);
 
   // Create brand new Google Spreadsheet with all tabs and live data
@@ -2051,6 +2164,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addCustomer,
         updateCustomer,
         deleteCustomer,
+        manufacturerModels,
+        manufacturers,
+        getModelsForManufacturer,
+        addManufacturerModel,
+        updateManufacturerModel,
+        deleteManufacturerModel,
         spareParts,
         addSparePart,
         updateSparePart,

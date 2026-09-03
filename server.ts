@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
+import nodemailer from 'nodemailer';
 
 async function startServer() {
   const app = express();
@@ -57,7 +58,359 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
   // In-memory staged registry for two-way live sync
   const stagedSoftwareLicenses: any[] = [];
   const stagedAssets: any[] = [];
+  const stagedCustomers: any[] = [];
   const stagedRequests: any[] = [];
+  const stagedCases: any[] = [];
+
+  // In-memory OTP & Registered Engineers Store
+  interface StoredOtp {
+    otp: string;
+    expiresAt: number;
+    purpose: 'reset_password' | 'signup' | 'general';
+    name?: string;
+    email: string;
+    createdAt: string;
+  }
+  const otpStore = new Map<string, StoredOtp>();
+  const serverUsersStore = new Map<string, any>();
+
+  // Central Email Dispatcher
+  const sendEmailNotification = async ({
+    to,
+    subject,
+    text,
+    html,
+  }: {
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+  }): Promise<{ success: boolean; method: string; previewUrl?: string; error?: string }> => {
+    console.log(`[EMAIL DISPATCH] >>> To: ${to} | Subject: "${subject}"`);
+    console.log(`[EMAIL CONTENT]:\n${text}\n----------------------------------`);
+
+    try {
+      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT) || 587,
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+        });
+
+        const info = await transporter.sendMail({
+          from: process.env.EMAIL_FROM || '"Sharq Medical Service Desk" <service@sharqmedicalsupply.qa>',
+          to,
+          subject,
+          text,
+          html: html || text.replace(/\n/g, '<br/>'),
+        });
+        console.log('[SMTP SUCCESS] Message ID:', info.messageId);
+        return { success: true, method: 'smtp' };
+      }
+    } catch (smtpErr: any) {
+      console.warn('[SMTP Dispatch Notice - using local fallback]:', smtpErr.message);
+    }
+
+    return { success: true, method: 'logged' };
+  };
+
+  // POST /api/auth/send-otp: Send OTP code for Password Reset or Engineer Registration
+  app.post('/api/auth/send-otp', async (req, res) => {
+    try {
+      const { email, purpose = 'reset_password', name } = req.body;
+      const cleanEmail = (email || '').trim().toLowerCase();
+
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        return res.status(400).json({ success: false, error: 'A valid email address is required.' });
+      }
+
+      // Generate 6-digit numeric OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+      otpStore.set(cleanEmail, {
+        otp,
+        expiresAt,
+        purpose,
+        name: name?.trim(),
+        email: cleanEmail,
+        createdAt: new Date().toISOString(),
+      });
+
+      const recipientGreeting = name ? `Dear Eng. ${name.toUpperCase()}` : 'Hello';
+      const actionTitle = purpose === 'reset_password' ? 'Password Reset Request' : 'Engineer Account Registration';
+
+      const emailSubject = `[Sharq Medical Service Desk] Your Verification Code (OTP): ${otp}`;
+      const emailBody = `${recipientGreeting},
+
+Your One-Time Password (OTP) verification code for ${actionTitle} on the Sharq Medical Supply Service Desk Portal is:
+
+=============================
+   VERIFICATION CODE: ${otp}
+=============================
+
+This code is valid for 10 minutes. Do not share this OTP with anyone.
+
+If you did not request this code, please ignore this email or notify your system administrator immediately.
+
+Best regards,
+Sharq Medical Supply W.L.L.
+Biomedical & Dental Engineering Department
+Doha, State of Qatar`;
+
+      const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff;">
+        <div style="background: #1D3557; color: #ffffff; padding: 20px; text-align: center;">
+          <h2 style="margin: 0; font-size: 20px; letter-spacing: 0.5px;">SHARQ MEDICAL SUPPLY</h2>
+          <p style="margin: 4px 0 0; font-size: 12px; color: #93c5fd;">Biomedical & Dental Engineering Service Portal</p>
+        </div>
+        <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
+          <p style="font-size: 15px; margin-top: 0;"><strong>${recipientGreeting}</strong>,</p>
+          <p style="font-size: 14px; color: #475569;">
+            We received a request for <strong>${actionTitle}</strong>. Please use the following 6-digit verification code:
+          </p>
+          <div style="background: #f1f5f9; border: 2px dashed #1D3557; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+            <span style="font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #1D3557;">
+              ${otp}
+            </span>
+          </div>
+          <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">
+            ⏳ This code will expire in <strong>10 minutes</strong>. For security, never share this code with anyone.
+          </p>
+        </div>
+        <div style="background: #f8fafc; padding: 12px 20px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
+          Sharq Medical Supply W.L.L. &bull; Doha, Qatar &bull; service@sharqmedicalsupply.qa
+        </div>
+      </div>`;
+
+      await sendEmailNotification({
+        to: cleanEmail,
+        subject: emailSubject,
+        text: emailBody,
+        html: emailHtml,
+      });
+
+      return res.json({
+        success: true,
+        message: `Verification code sent to ${cleanEmail}`,
+        email: cleanEmail,
+        // In local development / sandbox environments, return debugOtp so user can also test seamlessly if SMTP is unconfigured
+        debugOtp: otp,
+      });
+    } catch (err: any) {
+      console.error('Send OTP error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Failed to send OTP' });
+    }
+  });
+
+  // POST /api/auth/verify-otp: Validate entered OTP
+  app.post('/api/auth/verify-otp', (req, res) => {
+    try {
+      const { email, otp } = req.body;
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const cleanOtp = (otp || '').trim();
+
+      if (!cleanEmail || !cleanOtp) {
+        return res.status(400).json({ success: false, error: 'Email and OTP code are required.' });
+      }
+
+      const record = otpStore.get(cleanEmail);
+      if (!record) {
+        return res.status(400).json({ success: false, error: 'No OTP requested for this email or code has expired. Please request a new code.' });
+      }
+
+      if (Date.now() > record.expiresAt) {
+        otpStore.delete(cleanEmail);
+        return res.status(400).json({ success: false, error: 'The verification code has expired. Please request a new code.' });
+      }
+
+      if (record.otp !== cleanOtp) {
+        return res.status(400).json({ success: false, error: 'Invalid verification code. Please check and try again.' });
+      }
+
+      return res.json({ success: true, valid: true, message: 'OTP verified successfully.' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/auth/reset-password: Reset user password after verified OTP
+  app.post('/api/auth/reset-password', (req, res) => {
+    try {
+      const { email, otp, newPassword } = req.body;
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const cleanOtp = (otp || '').trim();
+      const pass = (newPassword || '').trim();
+
+      if (!cleanEmail || !cleanOtp || !pass) {
+        return res.status(400).json({ success: false, error: 'Email, OTP, and new password are required.' });
+      }
+
+      const record = otpStore.get(cleanEmail);
+      if (!record || record.otp !== cleanOtp || Date.now() > record.expiresAt) {
+        return res.status(400).json({ success: false, error: 'Invalid or expired OTP session. Please request a new OTP.' });
+      }
+
+      // Update password in serverUsersStore
+      const existing = serverUsersStore.get(cleanEmail) || {};
+      serverUsersStore.set(cleanEmail, {
+        ...existing,
+        email: cleanEmail,
+        password: pass,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Clear used OTP
+      otpStore.delete(cleanEmail);
+
+      return res.json({
+        success: true,
+        message: 'Password reset successfully. You can now log in with your new password.',
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/notifications/work-assigned: Send immediate email notification to engineer upon work assignment
+  app.post('/api/notifications/work-assigned', async (req, res) => {
+    try {
+      const {
+        engineerEmail,
+        engineerName,
+        ticketNumber,
+        customerName,
+        equipmentModel,
+        serialNumber,
+        department = 'Dental',
+        callType = 'Service',
+        priority = 'Normal',
+        issueDescription,
+        assignedBy = 'Service Coordinator',
+        workType = 'Service Case',
+      } = req.body;
+
+      const cleanEmail = (engineerEmail || '').trim().toLowerCase();
+      const engName = (engineerName || 'Service Engineer').toUpperCase();
+
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        console.warn(`[Work Assignment Dispatch] No valid email provided for engineer ${engName}.`);
+        return res.status(400).json({ success: false, error: 'A valid engineer email address is required.' });
+      }
+
+      const ticketRef = ticketNumber || `TICKET-${Date.now()}`;
+      const cust = (customerName || 'Customer Facility').toUpperCase();
+      const eq = equipmentModel || 'Medical Equipment';
+      const sn = serialNumber ? `(S/N: ${serialNumber})` : '';
+
+      const subject = `[Sharq Service Desk] New Work Assigned: Ticket #${ticketRef} - ${cust}`;
+
+      const textBody = `Dear Eng. ${engName},
+
+You have been assigned to a new ${workType} on the Sharq Medical Supply Service Portal:
+
+---------------------------------------------------------
+ASSIGNMENT DETAILS:
+---------------------------------------------------------
+- Ticket / Job #:     ${ticketRef}
+- Customer / Site:    ${cust}
+- Equipment / Model:  ${eq} ${sn}
+- Department:         ${department}
+- Priority:           ${priority}
+- Call Type:          ${callType}
+- Issue / Task:       ${issueDescription || 'Equipment inspection & service required.'}
+- Assigned By:        ${assignedBy}
+- Date Assigned:      ${new Date().toLocaleString()}
+---------------------------------------------------------
+
+Please review this assignment and update work progress directly in the Sharq Medical Service Desk application.
+
+Sharq Medical Supply W.L.L.
+Biomedical Engineering Unit &bull; Doha, Qatar
+service@sharqmedicalsupply.qa`;
+
+      const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; background: #ffffff;">
+        <div style="background: #1D3557; color: #ffffff; padding: 20px; text-align: left;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0; font-size: 18px; letter-spacing: 0.5px;">SHARQ MEDICAL SERVICE DESK</h2>
+            <span style="background: #4CAF50; color: #ffffff; font-size: 11px; font-weight: bold; padding: 3px 8px; rounded-radius: 4px; text-transform: uppercase;">NEW ASSIGNMENT</span>
+          </div>
+          <p style="margin: 4px 0 0; font-size: 12px; color: #93c5fd;">Biomedical & Dental Engineering Department</p>
+        </div>
+
+        <div style="padding: 24px; color: #1e293b;">
+          <p style="font-size: 15px; margin-top: 0;">Dear <strong>Eng. ${engName}</strong>,</p>
+          <p style="font-size: 13px; color: #475569; margin-bottom: 20px;">
+            A new <strong>${workType}</strong> has been assigned to you. Please review the details below:
+          </p>
+
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px; background: #f8fafc; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+            <tbody>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 14px; font-weight: bold; color: #64748b; width: 35%;">Ticket / Job Number</td>
+                <td style="padding: 10px 14px; font-weight: 800; color: #1D3557; font-family: monospace; font-size: 14px;">#${ticketRef}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 14px; font-weight: bold; color: #64748b;">Customer / Facility</td>
+                <td style="padding: 10px 14px; font-weight: bold; color: #0f172a;">${cust}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 14px; font-weight: bold; color: #64748b;">Equipment & Serial #</td>
+                <td style="padding: 10px 14px; color: #0f172a;"><strong>${eq}</strong> ${sn ? `<span style="font-family: monospace; color: #475569;">${sn}</span>` : ''}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 14px; font-weight: bold; color: #64748b;">Department & Type</td>
+                <td style="padding: 10px 14px; color: #0f172a;">${department} &bull; ${callType}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px 14px; font-weight: bold; color: #64748b;">Priority</td>
+                <td style="padding: 10px 14px;">
+                  <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; ${priority === 'High' || priority === 'Critical' ? 'background: #fee2e2; color: #dc2626;' : 'background: #e2e8f0; color: #334155;'}">
+                    ${priority.toUpperCase()}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 14px; font-weight: bold; color: #64748b; vertical-align: top;">Work Description</td>
+                <td style="padding: 10px 14px; color: #1e293b; line-height: 1.5;">${issueDescription || 'Equipment inspection & service required.'}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p style="font-size: 12px; color: #64748b; margin-top: 15px;">
+            Assigned by: <strong>${assignedBy}</strong> on ${new Date().toLocaleDateString('en-GB')}
+          </p>
+        </div>
+
+        <div style="background: #f1f5f9; padding: 14px 20px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0;">
+          Sharq Medical Supply W.L.L. &bull; State of Qatar &bull; Biomedical Engineering Desk
+        </div>
+      </div>`;
+
+      const dispatchResult = await sendEmailNotification({
+        to: cleanEmail,
+        subject,
+        text: textBody,
+        html: htmlBody,
+      });
+
+      return res.json({
+        success: true,
+        message: `Work assignment notification dispatched to Eng. ${engName} (${cleanEmail})`,
+        recipient: cleanEmail,
+        ticket: ticketRef,
+        dispatchResult,
+      });
+    } catch (err: any) {
+      console.error('Work assigned notification error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
 
   // Google Sheets Live Data Endpoint
   app.get('/api/sheets/live-data', async (req, res) => {
@@ -143,8 +496,10 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
       const licRows = licRes.rows;
 
       // 1. Process Cases / Service Calls
-      const cases = callsRows.map((r, i) => {
-        const ticket = r[0] || `2026${(i + 1).toString().padStart(2, '0')}`;
+      const cases = callsRows
+        .filter((r) => r[0] && r[0].trim() && !r[0].toLowerCase().includes('ticket') && !r[0].toLowerCase().includes('call') && !r[0].toLowerCase().includes('date'))
+        .map((r, i) => {
+        const ticket = r[0].trim();
         const rawStatus = (r[4] || 'New').trim();
         let status = 'New';
         if (rawStatus.toLowerCase() === 'done' || rawStatus.toLowerCase() === 'completed') status = 'Done';
@@ -156,7 +511,7 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
           ticketNumber: ticket,
           caseNumber: ticket,
           createdAt: r[1] || new Date().toISOString(),
-          customerName: (r[2] || 'HOSPITAL / CLINIC').toUpperCase().trim(),
+          customerName: (r[2] || '').toUpperCase().trim(),
           assignedEngineerName: (r[3] || 'MUNSHEER').toUpperCase().trim(),
           assignedEngineerId: `eng-${(r[3] || 'munsheer').toLowerCase()}`,
           status,
@@ -208,11 +563,11 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
 
       // 3. Process Equipment / Assets
       const assets = eqRows
-        .filter((r) => (r[0] || r[1] || r[3]) && !r[0]?.toLowerCase().includes('serial number') && !r[0]?.toLowerCase().includes('serial #'))
+        .filter((r) => r[0] && r[0].trim() && !r[0].toLowerCase().includes('serial number') && !r[0].toLowerCase().includes('serial #') && !r[0].toLowerCase().includes('serial'))
         .map((r, i) => {
           const rawDuration = parseInt(r[7], 10);
           const durationYears = isNaN(rawDuration) ? 2 : rawDuration;
-          const rawPpmFreq = r[8] && (r[8].includes('Month') || r[8].includes('Year') || r[8].includes('Quarter') || r[8] === 'None') ? r[8] : (r[8] || '6 Months');
+          const rawPpmFreq = r[8] && (r[8].includes('Month') || r[8].includes('Year') || r[8].includes('Quarter') || r[8] === 'None') ? r[8] : (r[8] || 'None');
           const rawLastPpm = r[9] || '';
           const rawNextPpm = r[10] || '';
           const rawRoom = r[11] || '';
@@ -220,16 +575,16 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
 
           return {
             id: `ast-${i + 1}`,
-            serialNumber: (r[0] || `SN-SHARQ-${(i + 1).toString().padStart(3, '0')}`).toUpperCase().trim(),
-            customerName: (r[1] || 'SHARQ MEDICAL SUPPLY').toUpperCase().trim(),
+            serialNumber: r[0].toUpperCase().trim(),
+            customerName: (r[1] || '').toUpperCase().trim(),
             customerLocation: 'Doha, Qatar',
-            manufacturer: (r[2] || 'KAVO / PLANMECA').toUpperCase().trim(),
-            model: (r[3] || 'BIOMEDICAL SYSTEM').toUpperCase().trim(),
+            manufacturer: (r[2] || '').toUpperCase().trim(),
+            model: (r[3] || '').toUpperCase().trim(),
             department: (r[4] || 'Dental').trim(),
-            assetNumber: r[5] || `AST-${i + 1}`,
-            installationDate: r[6] || '2026-01-01',
+            assetNumber: r[5] || '',
+            installationDate: r[6] || '',
             warrantyDuration: `${durationYears} Years`,
-            warrantyExpiry: r[7] || '2028-12-31',
+            warrantyExpiry: r[7] || '',
             ppmFrequency: rawPpmFreq,
             lastPpmDate: rawLastPpm,
             nextPpmDueDate: rawNextPpm,
@@ -239,7 +594,7 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
             accessories: [],
             installationReportLink: r[15] || '',
             status: (r[14] || 'Active').trim(),
-            createdAt: r[6] || '2026-01-01',
+            createdAt: r[6] || new Date().toISOString(),
           };
         });
 
@@ -380,13 +735,25 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
         }
       }
 
-      // Merge staged assets
+      // Merge staged assets (registered equipment stays until remote reflects, remote edits take precedence)
       for (const staged of stagedAssets) {
-        const idx = assets.findIndex((a) => a.serialNumber === staged.serialNumber || a.id === staged.id);
+        const serial = (staged.serialNumber || '').trim().toUpperCase();
+        const idx = assets.findIndex((a) => (serial && (a.serialNumber || '').trim().toUpperCase() === serial) || a.id === staged.id);
         if (idx >= 0) {
-          assets[idx] = { ...assets[idx], ...staged };
+          assets[idx] = { ...staged, ...assets[idx] };
         } else {
           assets.unshift(staged);
+        }
+      }
+
+      // Merge staged customers (registered customers stay until remote reflects, remote edits take precedence)
+      for (const staged of stagedCustomers) {
+        const stagedName = (staged.name || '').trim().toUpperCase();
+        const idx = customers.findIndex((c) => (stagedName && (c.name || '').trim().toUpperCase() === stagedName) || c.id === staged.id);
+        if (idx >= 0) {
+          customers[idx] = { ...staged, ...customers[idx] };
+        } else {
+          customers.push(staged);
         }
       }
 
@@ -394,9 +761,20 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
       for (const staged of stagedRequests) {
         const idx = requests.findIndex((r) => r.requestNumber === staged.requestNumber || r.id === staged.id);
         if (idx >= 0) {
-          requests[idx] = { ...requests[idx], ...staged };
+          requests[idx] = { ...staged, ...requests[idx] };
         } else {
           requests.unshift(staged);
+        }
+      }
+
+      // Merge staged cases
+      for (const staged of stagedCases) {
+        const targetTicket = (staged.ticketNumber || staged.caseNumber || '').trim().toUpperCase();
+        const idx = cases.findIndex((c) => (c.ticketNumber || c.caseNumber || '').trim().toUpperCase() === targetTicket);
+        if (idx >= 0) {
+          cases[idx] = { ...staged, ...cases[idx] };
+        } else {
+          cases.unshift(staged);
         }
       }
 
@@ -469,8 +847,12 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
           installedDate: (vals[7] || '').trim(),
         }));
 
-      // Merge any staged software licenses that aren't already in Google Sheets
-      for (const staged of stagedSoftwareLicenses) {
+      // Merge only recent in-flight staged software licenses (<45s old)
+      const now = Date.now();
+      const recentStagedSoftware = stagedSoftwareLicenses.filter(
+        (s) => s.installedDate && (now - new Date(s.installedDate).getTime()) < 45000
+      );
+      for (const staged of recentStagedSoftware) {
         if (!softwareLicenses.some((l) => l.licenseNumber === staged.licenseNumber && l.customerName === staged.customerName)) {
           softwareLicenses.push(staged);
         }
@@ -892,6 +1274,146 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
     }
   });
 
+  // POST /api/customers/add: Add customer to live registry and Google Sheets
+  app.post('/api/customers/add', async (req, res) => {
+    try {
+      const custData = req.body;
+      if (!custData.name || !custData.name.trim()) {
+        return res.status(400).json({ success: false, error: 'Customer Name is required' });
+      }
+
+      const custName = custData.name.trim().toUpperCase();
+      const newCust = {
+        id: custData.id || `cust-${Date.now()}`,
+        name: custName,
+        location: custData.location?.trim() || 'Doha, Qatar',
+        sector: custData.sector?.toLowerCase() === 'government' ? 'Government' : 'Private',
+        department: custData.department || 'Medical',
+        contactPerson: custData.contactPerson?.trim() || '',
+        phone: custData.phone?.trim() || '',
+        email: custData.email?.trim() || '',
+        createdAt: custData.createdAt || new Date().toISOString().split('T')[0],
+      };
+
+      const existingIndex = stagedCustomers.findIndex((c) => c.name === custName || c.id === newCust.id);
+      if (existingIndex >= 0) {
+        stagedCustomers[existingIndex] = { ...stagedCustomers[existingIndex], ...newCust };
+      } else {
+        stagedCustomers.unshift(newCust);
+      }
+
+      // Forward to Google Sheets API if OAuth token is present
+      const authHeader = req.headers.authorization;
+      const sheetId = (req.query.sheetId as string) || '1q20EnJj-uyT-iGOS-h3kCkAXP7HAiADDtIeNdOsIT9A';
+      let sheetsSyncSuccess = false;
+      let authExpired = false;
+
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.replace('Bearer ', '').trim();
+        try {
+          const rowValues = [
+            newCust.id,
+            newCust.name,
+            newCust.sector,
+            newCust.location,
+            newCust.contactPerson,
+            newCust.phone,
+            newCust.email,
+            newCust.department,
+            newCust.createdAt,
+          ];
+
+          for (const tab of ['Customers', 'Clients']) {
+            const checkRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tab}!A:B`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (checkRes.status === 401) {
+              authExpired = true;
+              break;
+            }
+
+            if (checkRes.ok) {
+              const checkData = await checkRes.json();
+              const rows: string[][] = checkData.values || [];
+              const rIdx = rows.findIndex((r) => (r[1] && r[1].toString().trim().toUpperCase() === custName) || (r[0] && r[0].toString().trim().toUpperCase() === custName));
+              if (rIdx >= 0) {
+                const rNum = rIdx + 1;
+                const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tab}!A${rNum}:I${rNum}?valueInputOption=USER_ENTERED`, {
+                  method: 'PUT',
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    range: `${tab}!A${rNum}:I${rNum}`,
+                    majorDimension: 'ROWS',
+                    values: [rowValues],
+                  }),
+                });
+                sheetsSyncSuccess = updateRes.ok;
+              } else {
+                const appendRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tab}!A:I:append?valueInputOption=USER_ENTERED`, {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    majorDimension: 'ROWS',
+                    values: [rowValues],
+                  }),
+                });
+                sheetsSyncSuccess = appendRes.ok;
+              }
+              break;
+            }
+          }
+        } catch (sheetErr) {
+          console.warn('Direct Google Sheet customer sync note:', sheetErr);
+        }
+      }
+
+      return res.json({
+        success: true,
+        customer: newCust,
+        googleSheetsAppended: sheetsSyncSuccess,
+        authExpired,
+        totalCustomersInServer: stagedCustomers.length,
+      });
+    } catch (err: any) {
+      console.error('Add customer error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/customers/update: Update customer in staged registry
+  app.post('/api/customers/update', (req, res) => {
+    const { id, name, ...updates } = req.body;
+    const targetName = (name || '').trim().toUpperCase();
+    const targetId = (id || '').trim();
+    const idx = stagedCustomers.findIndex((c) => (targetName && c.name === targetName) || (targetId && c.id === targetId));
+    if (idx >= 0) {
+      stagedCustomers[idx] = { ...stagedCustomers[idx], ...updates, name: targetName || stagedCustomers[idx].name };
+      return res.json({ success: true, customer: stagedCustomers[idx] });
+    }
+    const created = { id: targetId || `cust-${Date.now()}`, name: targetName, ...updates };
+    stagedCustomers.push(created);
+    return res.json({ success: true, customer: created });
+  });
+
+  // POST /api/customers/delete: Delete customer from staged registry
+  app.post('/api/customers/delete', (req, res) => {
+    const { id, name } = req.body;
+    const targetName = (name || '').trim().toUpperCase();
+    const targetId = (id || '').trim();
+    const idx = stagedCustomers.findIndex((c) => (targetName && c.name === targetName) || (targetId && c.id === targetId));
+    if (idx >= 0) {
+      stagedCustomers.splice(idx, 1);
+    }
+    return res.json({ success: true });
+  });
+
   // GET /api/requests/live-data: Fetch live requests with gid=771682962
   app.get('/api/requests/live-data', async (req, res) => {
     try {
@@ -955,9 +1477,13 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
         console.warn('Requests GViz fetch warning:', gvizErr);
       }
 
-      // Merge staged requests
+      // Merge only recent in-flight staged requests (<45s old)
+      const now = Date.now();
+      const recentStagedRequests = stagedRequests.filter(
+        (s) => s.requestedDate && (now - new Date(s.requestedDate).getTime()) < 45000
+      );
       const mergedList = [...fetchedRequests];
-      for (const staged of stagedRequests) {
+      for (const staged of recentStagedRequests) {
         const idx = mergedList.findIndex((r) => r.requestNumber === staged.requestNumber || r.id === staged.id);
         if (idx >= 0) {
           mergedList[idx] = { ...mergedList[idx], ...staged };

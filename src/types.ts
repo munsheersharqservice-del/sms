@@ -184,6 +184,7 @@ export interface ServiceCase {
   scannedReportAttachment?: string | AttachmentItem;
   scannedReportDriveLink?: string;
   priority?: CasePriority;
+  closeDate?: string;
   createdAt: string;
   updatedAt: string;
 }

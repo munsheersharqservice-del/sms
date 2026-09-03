@@ -1,4 +1,5 @@
 import { Asset, ServiceCase, DoneWorkLog, RequestItem, ServiceProject, SoftwareLicense, Customer, SparePartItem, User, ManufacturerModel, Department } from '../types';
+import { handleAuthExpired } from './firebaseAuth';
 
 export const DEFAULT_SPREADSHEET_ID = '1q20EnJj-uyT-iGOS-h3kCkAXP7HAiADDtIeNdOsIT9A';
 export const DEFAULT_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1q20EnJj-uyT-iGOS-h3kCkAXP7HAiADDtIeNdOsIT9A/edit?usp=sharing';
@@ -91,6 +92,10 @@ async function updateSheetValues(accessToken: string, spreadsheetId: string, she
 
   if (!res.ok) {
     const errText = await res.text();
+    if (res.status === 401 || errText.includes('UNAUTHENTICATED') || errText.includes('401')) {
+      handleAuthExpired('updateSheetValues 401');
+      throw new Error('Google authorization expired (401). Please click "Sign in with Google" to re-authorize.');
+    }
     throw new Error(`Failed updating ${sheetName}: ${errText}`);
   }
 }
@@ -208,6 +213,10 @@ export async function appendCaseToSheet(
 
   if (!appendRes.ok) {
     const txt = await appendRes.text();
+    if (appendRes.status === 401 || txt.includes('UNAUTHENTICATED') || txt.includes('401')) {
+      handleAuthExpired('appendCaseToSheet 401');
+      throw new Error('Google authorization expired (401). Please click "Sign in with Google" to re-authorize.');
+    }
     throw new Error(`Google Sheets append to ${matchedTab} failed (${appendRes.status}): ${txt}`);
   }
 
@@ -232,6 +241,93 @@ export async function appendCaseToSheet(
   }
 
   return true;
+}
+
+export async function updateCaseInSheet(
+  accessToken: string,
+  spreadsheetId: string,
+  caseItem: ServiceCase
+): Promise<boolean> {
+  const cleanId = extractSpreadsheetId(spreadsheetId);
+  const existingTabs = await getSpreadsheetTabTitles(accessToken, cleanId);
+  const matchedTab = matchTabName(
+    existingTabs,
+    ['Service_Calls', 'Service Call', 'Service Calls', 'Service_Call', 'Cases'],
+    'Service_Calls'
+  );
+  await ensureSheetTabsExist(accessToken, cleanId, [matchedTab]);
+
+  const standardSharqRow = [
+    caseItem.ticketNumber || caseItem.caseNumber,
+    caseItem.createdAt ? caseItem.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+    caseItem.customerName,
+    caseItem.assignedEngineerName,
+    caseItem.status,
+    caseItem.issueDescription,
+    caseItem.serialNumber || '',
+    caseItem.department,
+    caseItem.callType || caseItem.workClassification || 'Service',
+    caseItem.warrantyStatus,
+    (caseItem.attachments && caseItem.attachments.length > 0 ? caseItem.attachments[0].driveLink : caseItem.serviceReportDriveLink) || '',
+    caseItem.pendingReason || '',
+    caseItem.invoiceRequired || 'No',
+    caseItem.invoiceNumber || '',
+    caseItem.remarks || '',
+    caseItem.serviceReportNumber || '',
+    caseItem.serviceReportDriveLink || '',
+    caseItem.documentAttachmentFile || '',
+    (caseItem.status === 'Done' ? (caseItem.closeDate || caseItem.updatedAt || new Date().toISOString().split('T')[0]) : '') || '',
+  ];
+
+  const targetTicket = (caseItem.ticketNumber || caseItem.caseNumber || '').trim().toUpperCase();
+
+  try {
+    const colRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/${encodeURIComponent(matchedTab)}!A:A`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (colRes.status === 401) {
+      handleAuthExpired('updateCaseInSheet colRes 401');
+      throw new Error('Google authorization expired (401). Please click "Sign in with Google" to re-authorize.');
+    }
+    if (colRes.ok) {
+      const colData = await colRes.json();
+      const colRows: string[][] = colData.values || [];
+      const rowIndex = colRows.findIndex(
+        (r) => r[0] && r[0].toString().trim().toUpperCase() === targetTicket
+      );
+      if (rowIndex >= 0) {
+        const rowNum = rowIndex + 1;
+        const updateRes = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/${encodeURIComponent(matchedTab)}!A${rowNum}:S${rowNum}?valueInputOption=USER_ENTERED`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              range: `${matchedTab}!A${rowNum}:S${rowNum}`,
+              majorDimension: 'ROWS',
+              values: [standardSharqRow],
+            }),
+          }
+        );
+        if (updateRes.status === 401) {
+          handleAuthExpired('updateCaseInSheet updateRes 401');
+          throw new Error('Google authorization expired (401). Please click "Sign in with Google" to re-authorize.');
+        }
+        return updateRes.ok;
+      }
+    }
+  } catch (err: any) {
+    if (err.message && err.message.includes('401')) {
+      throw err;
+    }
+    console.warn('Find case row in sheet error:', err);
+  }
+
+  return appendCaseToSheet(accessToken, spreadsheetId, caseItem);
 }
 
 export async function appendDoneWorkToSheet(
@@ -290,15 +386,20 @@ export async function appendAssetToSheet(
   asset: Asset
 ): Promise<boolean> {
   const cleanId = extractSpreadsheetId(spreadsheetId);
-  const existingTabs = await getSpreadsheetTabTitles(accessToken, cleanId);
+  let matchedTab = 'Equipment';
 
-  // Tab candidate names for Equipment / Assets
-  const eqCandidates = ['Equipment', 'Assets', 'Asset_Registry', 'Machines', 'Asset Registry', 'Equipments', 'Equipment_List'];
-  const matchedTab = matchTabName(existingTabs, eqCandidates, 'Equipment');
-
-  // If the matched tab does not exist in the spreadsheet, create it
-  if (!existingTabs.some(t => t.toLowerCase() === matchedTab.toLowerCase())) {
-    await ensureSheetTabsExist(accessToken, cleanId, [matchedTab]);
+  try {
+    const existingTabs = await getSpreadsheetTabTitles(accessToken, cleanId);
+    if (existingTabs && existingTabs.length > 0) {
+      const eqCandidates = ['Equipment', 'Assets', 'Asset_Registry', 'Machines', 'Asset Registry', 'Equipments', 'Equipment_List'];
+      matchedTab = matchTabName(existingTabs, eqCandidates, 'Equipment');
+      if (!existingTabs.some(t => t.toLowerCase() === matchedTab.toLowerCase())) {
+        await ensureSheetTabsExist(accessToken, cleanId, [matchedTab]).catch(() => {});
+      }
+    }
+  } catch (tabErr) {
+    console.warn('Tab detection skipped for equipment sync, using Equipment:', tabErr);
+    matchedTab = 'Equipment';
   }
 
   // Check if header row exists
@@ -383,6 +484,10 @@ export async function appendAssetToSheet(
       `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/${encodeURIComponent(matchedTab)}!A:A`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
+    if (getRes.status === 401) {
+      handleAuthExpired('appendAssetToSheet getRes 401');
+      throw new Error('Google authorization expired (401). Please click "Sign in with Google" to re-authorize.');
+    }
     if (getRes.ok) {
       const colData = await getRes.json();
       const colRows: string[][] = colData.values || [];
@@ -407,10 +512,17 @@ export async function appendAssetToSheet(
             }),
           }
         );
+        if (putRes.status === 401) {
+          handleAuthExpired('appendAssetToSheet putRes 401');
+          throw new Error('Google authorization expired (401). Please click "Sign in with Google" to re-authorize.');
+        }
         appendedOrUpdated = putRes.ok;
       }
     }
-  } catch (checkErr) {
+  } catch (checkErr: any) {
+    if (checkErr.message && checkErr.message.includes('401')) {
+      throw checkErr;
+    }
     console.warn('Check existing asset row warning:', checkErr);
   }
 
@@ -431,6 +543,10 @@ export async function appendAssetToSheet(
         }),
       }
     );
+    if (appendRes.status === 401) {
+      handleAuthExpired('appendAssetToSheet appendRes 401');
+      throw new Error('Google authorization expired (401). Please click "Sign in with Google" to re-authorize.');
+    }
     appendedOrUpdated = appendRes.ok;
     if (!appendRes.ok) {
       const errText = await appendRes.text();
@@ -945,17 +1061,17 @@ export async function appendCustomerToSheet(
   customer: Customer
 ): Promise<boolean> {
   const cleanId = extractSpreadsheetId(spreadsheetId);
-  const existingTabs = await getSpreadsheetTabTitles(accessToken, cleanId);
+  let matchedTab = 'Customers';
 
-  const custCandidates = ['Customers', 'Clients', 'Customer_List', 'Hospitals'];
-  const matchedTab = matchTabName(existingTabs, custCandidates, 'Customers');
-
-  if (!existingTabs.some((t) => t.toLowerCase() === matchedTab.toLowerCase())) {
-    await ensureSheetTabsExist(accessToken, cleanId, [matchedTab]);
-    const custHeader = [
-      ['Customer ID', 'Customer Name', 'Sector', 'Location / City', 'Contact Person', 'Phone', 'Email', 'Department', 'Registered Date']
-    ];
-    await updateSheetValues(accessToken, cleanId, matchedTab, custHeader);
+  try {
+    const existingTabs = await getSpreadsheetTabTitles(accessToken, cleanId);
+    if (existingTabs && existingTabs.length > 0) {
+      const custCandidates = ['Customers', 'Clients', 'Customer_List', 'Hospitals'];
+      matchedTab = matchTabName(existingTabs, custCandidates, 'Customers');
+    }
+  } catch (tabErr) {
+    console.warn('Tab detection skipped for customer sync, using Customers:', tabErr);
+    matchedTab = 'Customers';
   }
 
   const rowValues = [
@@ -970,20 +1086,79 @@ export async function appendCustomerToSheet(
     customer.createdAt || new Date().toISOString().split('T')[0],
   ];
 
-  const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/${encodeURIComponent(matchedTab)}!A:I:append?valueInputOption=USER_ENTERED`;
-  const res = await fetch(appendUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      majorDimension: 'ROWS',
-      values: [rowValues],
-    }),
-  });
+  const targetName = customer.name ? customer.name.trim().toUpperCase() : '';
+  let updatedOrAppended = false;
 
-  return res.ok;
+  // Check if customer already exists in column B
+  try {
+    const getRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/${encodeURIComponent(matchedTab)}!B:B`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (getRes.status === 401) {
+      handleAuthExpired('appendCustomerToSheet getRes 401');
+      throw new Error('Google authorization expired (401). Please click "Sign in with Google" to re-authorize.');
+    }
+    if (getRes.ok) {
+      const colData = await getRes.json();
+      const colRows: string[][] = colData.values || [];
+      const rowIndex = colRows.findIndex(
+        (r) => r[0] && r[0].toString().trim().toUpperCase() === targetName
+      );
+
+      if (rowIndex >= 0) {
+        const rowNum = rowIndex + 1;
+        const putRes = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/${encodeURIComponent(matchedTab)}!A${rowNum}:I${rowNum}?valueInputOption=USER_ENTERED`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              range: `${matchedTab}!A${rowNum}:I${rowNum}`,
+              majorDimension: 'ROWS',
+              values: [rowValues],
+            }),
+          }
+        );
+        if (putRes.status === 401) {
+          handleAuthExpired('appendCustomerToSheet putRes 401');
+          throw new Error('Google authorization expired (401). Please click "Sign in with Google" to re-authorize.');
+        }
+        updatedOrAppended = putRes.ok;
+      }
+    }
+  } catch (err: any) {
+    if (err.message && err.message.includes('401')) {
+      throw err;
+    }
+    console.warn('Check customer row warning:', err);
+  }
+
+  if (!updatedOrAppended) {
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/${encodeURIComponent(matchedTab)}!A:I:append?valueInputOption=USER_ENTERED`;
+    const res = await fetch(appendUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        majorDimension: 'ROWS',
+        values: [rowValues],
+      }),
+    });
+
+    if (res.status === 401) {
+      handleAuthExpired('appendCustomerToSheet append 401');
+      throw new Error('Google authorization expired (401). Please click "Sign in with Google" to re-authorize.');
+    }
+    return res.ok;
+  }
+
+  return true;
 }
 
 // Append or update single Manufacturer & Model to Google Sheet
@@ -1332,9 +1507,9 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
 
   const seenAssetIds = new Set<string>();
   const assets = eqRows
-    .filter((r) => (r[0] || r[1] || r[3]) && !r[0]?.toLowerCase().includes('serial number') && !r[0]?.toLowerCase().includes('serial #'))
+    .filter((r) => r[0] && r[0].trim() && !r[0].toLowerCase().includes('serial number') && !r[0].toLowerCase().includes('serial #') && !r[0].toLowerCase().includes('serial'))
     .map((r, i) => {
-      const serial = (r[0] || `SN-SHARQ-${(i + 1).toString().padStart(3, '0')}`).toUpperCase().trim();
+      const serial = r[0].toUpperCase().trim();
       const serialSlug = serial.replace(/[^A-Z0-9]/g, '_').toLowerCase();
       let uniqueAssetId = `ast-sheet-${serialSlug}-${i + 1}`;
       if (seenAssetIds.has(uniqueAssetId)) {
@@ -1342,14 +1517,14 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
       }
       seenAssetIds.add(uniqueAssetId);
 
-      const custName = (r[1] || 'SHARQ MEDICAL SUPPLY').toUpperCase().trim();
-      const manufacturer = (r[2] || 'PLANMECA / KAVO').toUpperCase().trim();
-      const model = (r[3] || 'BIOMEDICAL SYSTEM').toUpperCase().trim();
+      const custName = (r[1] || '').toUpperCase().trim();
+      const manufacturer = (r[2] || '').toUpperCase().trim();
+      const model = (r[3] || '').toUpperCase().trim();
       const department = (r[4] || 'Dental').trim() as any;
-      const assetNumber = r[5] || `AST-${i + 1}`;
-      const installDate = r[6] || '2026-01-01';
-      const warrantyExp = r[7] || '2028-12-31';
-      const ppmFreq = (r[8] || '6 Months') as any;
+      const assetNumber = r[5] || '';
+      const installDate = r[6] || '';
+      const warrantyExp = r[7] || '';
+      const ppmFreq = (r[8] || 'None') as any;
       const lastPpm = r[9] || '';
       const nextPpm = r[10] || '';
       const roomWard = r[11] || '';
@@ -1379,7 +1554,7 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
         status,
         installationReportLink: reportLink,
         accessories: [],
-        createdAt: installDate || '2026-01-01',
+        createdAt: installDate || new Date().toISOString(),
       };
     });
 

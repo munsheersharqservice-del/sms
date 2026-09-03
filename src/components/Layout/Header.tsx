@@ -126,11 +126,19 @@ export const Header: React.FC = () => {
                     <button
                       type="button"
                       onClick={connectGoogle}
-                      className="flex items-center space-x-1 px-2 py-1.5 bg-blue-950/70 hover:bg-blue-900 border border-blue-500/50 text-blue-300 rounded-lg text-xs font-medium transition-colors"
+                      className={`flex items-center space-x-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                        sheetsSyncStatus && (sheetsSyncStatus.includes('expired') || sheetsSyncStatus.includes('re-authorize'))
+                          ? 'bg-amber-500/25 hover:bg-amber-500/35 border-amber-400 text-amber-200 animate-pulse'
+                          : 'bg-blue-950/70 hover:bg-blue-900 border-blue-500/50 text-blue-300'
+                      }`}
                       title="Sign in with Google to enable Drive uploads & Sheets sync"
                     >
                       <Cloud className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                      <span className="text-[10px] sm:text-xs">Connect</span>
+                      <span className="text-[10px] sm:text-xs">
+                        {sheetsSyncStatus && (sheetsSyncStatus.includes('expired') || sheetsSyncStatus.includes('re-authorize'))
+                          ? 'Re-Connect'
+                          : 'Connect Google'}
+                      </span>
                     </button>
                   )}
 
@@ -249,11 +257,26 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* Sheets Sync Alert Banner - Admin Only */}
-        {isAdmin && sheetsSyncStatus && (
-          <div className="bg-orange-950/90 text-orange-100 px-3 py-1 text-[11px] text-center border-t border-orange-700 flex items-center justify-center space-x-2">
-            <RefreshCw className={`w-3 h-3 text-[#4CAF50] ${isSyncingSheets ? 'animate-spin' : ''}`} />
+        {/* Sheets Sync Alert Banner */}
+        {sheetsSyncStatus && (
+          <div
+            className={`px-3 py-1.5 text-[11px] text-center border-t flex items-center justify-center space-x-2 transition-colors ${
+              sheetsSyncStatus.includes('expired') || sheetsSyncStatus.includes('re-authorize')
+                ? 'bg-amber-950 text-amber-200 border-amber-600 font-semibold shadow-inner'
+                : 'bg-[#0f1d2e] text-slate-200 border-slate-700'
+            }`}
+          >
+            <RefreshCw className={`w-3 h-3 text-[#FF5722] ${isSyncingSheets ? 'animate-spin' : ''}`} />
             <span>{sheetsSyncStatus}</span>
+            {(sheetsSyncStatus.includes('expired') || sheetsSyncStatus.includes('re-authorize') || !isGoogleConnected) && (
+              <button
+                type="button"
+                onClick={connectGoogle}
+                className="ml-2 px-2.5 py-0.5 bg-[#FF5722] hover:bg-[#F4511E] text-white rounded text-[10px] font-bold cursor-pointer transition-colors shadow-xs"
+              >
+                Sign In with Google
+              </button>
+            )}
           </div>
         )}
       </header>
