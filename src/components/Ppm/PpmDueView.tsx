@@ -865,14 +865,15 @@ export const PpmDueView: React.FC = () => {
         </div>
       )}
 
-      {/* 5. QUICK COMPLETE PPM RECORD MODAL */}
+      {/* 5. QUICK COMPLETE PPM RECORD MODAL - RESPONSIVE WITH STICKY CLOSE & SUBMIT */}
       {completingAsset && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className={`rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border ${
-            isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+        <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className={`rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border overflow-hidden transition-all ${
+            isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
           }`}>
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <div className="flex items-center space-x-2">
+            {/* Pinned Sticky Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3 sm:px-6 sm:py-4 shrink-0 bg-white dark:bg-slate-900">
+              <div className="flex items-center space-x-2.5">
                 <div className="p-2 bg-[#1D3557]/10 text-[#1D3557] dark:text-blue-400 rounded-lg border border-[#1D3557]/20">
                   <CalendarCheck className="w-5 h-5" />
                 </div>
@@ -881,194 +882,207 @@ export const PpmDueView: React.FC = () => {
                     Record PPM Maintenance Completed
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Updates last service date and calculates next cycle target
+                    S/N: {completingAsset.serialNumber} • {completingAsset.model}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setCompletingAsset(null)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                title="Close modal"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
+                <span>Close</span>
               </button>
             </div>
 
             {completionSuccessMsg ? (
-              <div className="p-6 text-center space-y-2">
-                <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto animate-bounce" />
-                <h4 className="text-base font-bold text-emerald-600 dark:text-emerald-400">
+              <div className="p-8 text-center space-y-4 my-auto">
+                <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto animate-bounce" />
+                <h4 className="text-lg font-black text-emerald-600 dark:text-emerald-400">
                   PPM Successfully Recorded!
                 </h4>
-                <p className="text-xs text-slate-600 dark:text-slate-300">
+                <p className="text-xs text-slate-600 dark:text-slate-300 max-w-sm mx-auto">
                   {completionSuccessMsg}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => setCompletingAsset(null)}
+                  className="px-6 py-2.5 bg-slate-900 dark:bg-slate-700 text-white font-bold rounded-lg text-xs uppercase cursor-pointer"
+                >
+                  Close Window
+                </button>
               </div>
             ) : (
-              <form onSubmit={handleSavePpmCompletion} className="mt-4 space-y-3.5">
-                {/* Equipment Summary Banner */}
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-700 dark:text-slate-300">Customer:</span>
-                    <span className="font-black text-slate-900 dark:text-white">{completingAsset.customerName}</span>
+              <form id="ppm-complete-form" onSubmit={handleSavePpmCompletion} className="flex flex-col flex-1 overflow-hidden">
+                {/* Scrollable Form Content */}
+                <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-6 sm:py-4 space-y-3.5">
+                  {/* Equipment Summary Banner */}
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">Customer:</span>
+                      <span className="font-black text-slate-900 dark:text-white">{completingAsset.customerName}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">Equipment:</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {completingAsset.manufacturer} {completingAsset.model} (S/N: {completingAsset.serialNumber})
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">PPM Interval:</span>
+                      <span className="font-mono font-black text-[#1D3557] dark:text-blue-400">
+                        {completingAsset.ppmFrequency || '6 Months'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-700 dark:text-slate-300">Equipment:</span>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">
-                      {completingAsset.manufacturer} {completingAsset.model} (S/N: {completingAsset.serialNumber})
+
+                  {/* PPM Type Selector: 1-Yearly Maintenance vs 2-Routine Checkup */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      PPM Maintenance Classification:
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCompletionPpmType('Yearly Maintenance')}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                          completionPpmType === 'Yearly Maintenance'
+                            ? 'bg-[#1D3557] text-white border-[#1D3557] shadow-xs'
+                            : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                        }`}
+                      >
+                        <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">1</span>
+                        <span>Yearly Maintenance</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCompletionPpmType('Routine Checkup')}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                          completionPpmType === 'Routine Checkup'
+                            ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
+                            : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                        }`}
+                      >
+                        <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">2</span>
+                        <span>Routine Checkup</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* PPM Completion Date */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      PPM Execution / Service Date:
+                    </label>
+                    <input
+                      type="date"
+                      value={completionDate}
+                      onChange={(e) => setCompletionDate(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold focus:ring-1 focus:ring-[#1D3557]"
+                    />
+                  </div>
+
+                  {/* Next Target Preview */}
+                  <div className="p-2.5 bg-blue-50/60 dark:bg-blue-950/40 rounded-lg border border-blue-200 dark:border-blue-900 text-xs flex items-center justify-between">
+                    <span className="text-blue-900 dark:text-blue-300 font-bold">
+                      Next PPM will be scheduled for:
+                    </span>
+                    <span className="font-mono font-black text-blue-800 dark:text-blue-400 text-sm">
+                      {calculateNextPpmDate(completionDate, completingAsset.ppmFrequency || '6 Months') || 'N/A'}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-700 dark:text-slate-300">PPM Interval:</span>
-                    <span className="font-mono font-black text-[#1D3557] dark:text-blue-400">
-                      {completingAsset.ppmFrequency || '6 Months'}
-                    </span>
-                  </div>
-                </div>
 
-                {/* PPM Type Selector: 1-Yearly Maintenance vs 2-Routine Checkup */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    PPM Maintenance Classification:
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCompletionPpmType('Yearly Maintenance')}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
-                        completionPpmType === 'Yearly Maintenance'
-                          ? 'bg-[#1D3557] text-white border-[#1D3557] shadow-xs'
-                          : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
-                      }`}
+                  {/* Engineer */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Servicing Engineer:
+                    </label>
+                    <select
+                      value={completionEngineer}
+                      onChange={(e) => setCompletionEngineer(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
                     >
-                      <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">1</span>
-                      <span>Yearly Maintenance</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCompletionPpmType('Routine Checkup')}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
-                        completionPpmType === 'Routine Checkup'
-                          ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
-                          : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
-                      }`}
-                    >
-                      <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">2</span>
-                      <span>Routine Checkup</span>
-                    </button>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.name}>
+                          Eng. {u.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </div>
 
-                {/* PPM Completion Date */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    PPM Execution / Service Date:
-                  </label>
-                  <input
-                    type="date"
-                    value={completionDate}
-                    onChange={(e) => setCompletionDate(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold focus:ring-1 focus:ring-[#1D3557]"
-                  />
-                </div>
+                  {/* Remarks */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Work Done / Preventive Checks Remarks:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={completionRemarks}
+                      onChange={(e) => setCompletionRemarks(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-1 focus:ring-[#1D3557]"
+                    />
+                  </div>
 
-                {/* Next Target Preview */}
-                <div className="p-2.5 bg-blue-50/60 dark:bg-blue-950/40 rounded-lg border border-blue-200 dark:border-blue-900 text-xs flex items-center justify-between">
-                  <span className="text-blue-900 dark:text-blue-300 font-bold">
-                    Next PPM will be scheduled for:
-                  </span>
-                  <span className="font-mono font-black text-blue-800 dark:text-blue-400 text-sm">
-                    {calculateNextPpmDate(completionDate, completingAsset.ppmFrequency || '6 Months') || 'N/A'}
-                  </span>
-                </div>
-
-                {/* Engineer */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Servicing Engineer:
-                  </label>
-                  <select
-                    value={completionEngineer}
-                    onChange={(e) => setCompletionEngineer(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
-                  >
-                    {users.map((u) => (
-                      <option key={u.id} value={u.name}>
-                        Eng. {u.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Remarks */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Work Done / Preventive Checks Remarks:
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={completionRemarks}
-                    onChange={(e) => setCompletionRemarks(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-1 focus:ring-[#1D3557]"
-                  />
-                </div>
-
-                {/* PPM Attachment / Scanned Report with formatted Drive file name */}
-                <div className="pt-1">
-                  {(() => {
-                    const ppmDriveFileName = completingAsset
-                      ? (completingAsset.assetNumber?.trim()
-                          ? `${completingAsset.serialNumber.trim()}(${completingAsset.assetNumber.trim()})-PPM`
-                          : `${completingAsset.serialNumber.trim()}-PPM`)
-                      : '';
-                    return (
-                      <div className="space-y-1.5">
-                        <DriveAttachmentUploader
-                          attachments={completionAttachments}
-                          onChange={setCompletionAttachments}
-                          category="ServiceReport"
-                          customFileName={ppmDriveFileName}
-                          label={`Attach PPM Checklist / Field Service Report`}
-                          maxFiles={3}
-                        />
-                        <div className="flex items-center space-x-1.5 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 font-mono">
-                          <span className="font-bold text-[#1D3557] dark:text-blue-400 uppercase">Google Drive Filename:</span>
-                          <span className="font-extrabold text-slate-800 dark:text-slate-200">
-                            {ppmDriveFileName || 'SERIAL NUMBER( ASSET NUMBER )-PPM'}
-                          </span>
+                  {/* PPM Attachment / Scanned Report with formatted Drive file name */}
+                  <div className="pt-1">
+                    {(() => {
+                      const ppmDriveFileName = completingAsset
+                        ? (completingAsset.assetNumber?.trim()
+                            ? `${completingAsset.serialNumber.trim()}(${completingAsset.assetNumber.trim()})-PPM`
+                            : `${completingAsset.serialNumber.trim()}-PPM`)
+                        : '';
+                      return (
+                        <div className="space-y-1.5">
+                          <DriveAttachmentUploader
+                            attachments={completionAttachments}
+                            onChange={setCompletionAttachments}
+                            category="ServiceReport"
+                            customFileName={ppmDriveFileName}
+                            label={`Attach PPM Checklist / Field Service Report`}
+                            maxFiles={3}
+                          />
+                          <div className="flex items-center space-x-1.5 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 font-mono">
+                            <span className="font-bold text-[#1D3557] dark:text-blue-400 uppercase">Google Drive Filename:</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                              {ppmDriveFileName || 'SERIAL NUMBER( ASSET NUMBER )-PPM'}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
+                  </div>
+
+                  {/* Checkbox auto-create case */}
+                  <label className="flex items-center space-x-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={autoGenerateCase}
+                      onChange={(e) => setAutoGenerateCase(e.target.checked)}
+                      className="rounded text-[#1D3557] focus:ring-[#1D3557]"
+                    />
+                    <span>Create a closed "PPM Service Call" ticket in call history</span>
+                  </label>
                 </div>
 
-                {/* Checkbox auto-create case */}
-                <label className="flex items-center space-x-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={autoGenerateCase}
-                    onChange={(e) => setAutoGenerateCase(e.target.checked)}
-                    className="rounded text-[#1D3557] focus:ring-[#1D3557]"
-                  />
-                  <span>Create a closed "PPM Service Call" ticket in call history</span>
-                </label>
-
-                {/* Buttons */}
-                <div className="flex items-center justify-end space-x-2 pt-2">
+                {/* Pinned Sticky Footer: Always Visible Submit & Close Buttons */}
+                <div className="shrink-0 px-4 py-3 sm:px-6 sm:py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={() => setCompletingAsset(null)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                    className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                   >
-                    Cancel
+                    Close
                   </button>
+
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-[#1D3557] hover:bg-[#152740] text-white text-xs font-black rounded-lg shadow-md flex items-center space-x-1.5 cursor-pointer"
+                    className="px-5 py-2.5 bg-[#1D3557] hover:bg-[#152740] text-white text-xs font-black rounded-lg shadow-md flex items-center space-x-1.5 cursor-pointer transition-all"
                   >
                     <Check className="w-4 h-4" />
-                    <span>Save & Update Cycle</span>
+                    <span>SUBMIT PPM & UPDATE CYCLE</span>
                   </button>
                 </div>
               </form>
@@ -1079,12 +1093,12 @@ export const PpmDueView: React.FC = () => {
 
       {/* 6. SCHEDULE PPM FROM MASTER DATA MODAL */}
       {isScheduleMasterModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className={`rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border ${
-            isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+        <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className={`rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border overflow-hidden transition-all ${
+            isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
           }`}>
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <div className="flex items-center space-x-2">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 py-3 sm:px-6 sm:py-4 shrink-0 bg-white dark:bg-slate-900">
+              <div className="flex items-center space-x-2.5">
                 <div className="p-2 bg-[#1D3557]/10 text-[#1D3557] dark:text-blue-400 rounded-lg border border-[#1D3557]/20">
                   <Database className="w-5 h-5" />
                 </div>
@@ -1093,221 +1107,232 @@ export const PpmDueView: React.FC = () => {
                     Schedule PPM from Master Data
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Select equipment from master database to configure preventive maintenance schedule
+                    Configure preventive maintenance schedule
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsScheduleMasterModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
+                <span>Close</span>
               </button>
             </div>
 
             {masterSuccessMsg ? (
-              <div className="p-6 text-center space-y-2">
-                <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto animate-bounce" />
-                <h4 className="text-base font-bold text-emerald-600 dark:text-emerald-400">
+              <div className="p-8 text-center space-y-4 my-auto">
+                <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto animate-bounce" />
+                <h4 className="text-lg font-black text-emerald-600 dark:text-emerald-400">
                   PPM Schedule Saved!
                 </h4>
-                <p className="text-xs text-slate-600 dark:text-slate-300">
+                <p className="text-xs text-slate-600 dark:text-slate-300 max-w-sm mx-auto">
                   {masterSuccessMsg}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => setIsScheduleMasterModalOpen(false)}
+                  className="px-6 py-2.5 bg-slate-900 dark:bg-slate-700 text-white font-bold rounded-lg text-xs uppercase cursor-pointer"
+                >
+                  Close Window
+                </button>
               </div>
             ) : (
-              <form onSubmit={handleSaveMasterPpmSchedule} className="mt-4 space-y-3.5">
-                {/* 1. Asset Search & Selection */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Select Equipment from Master Data:
-                  </label>
-                  <div className="relative mb-2">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Search master assets by Serial No, Model, Customer..."
-                      value={masterSearch}
-                      onChange={(e) => setMasterSearch(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
-                    />
-                  </div>
+              <form onSubmit={handleSaveMasterPpmSchedule} className="flex flex-col flex-1 overflow-hidden">
+                <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-6 sm:py-4 space-y-3.5">
+                  {/* 1. Asset Search & Selection */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Select Equipment from Master Data:
+                    </label>
+                    <div className="relative mb-2">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search master assets by Serial No, Model, Customer..."
+                        value={masterSearch}
+                        onChange={(e) => setMasterSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                      />
+                    </div>
 
-                  {/* Master Assets List Selection Box */}
-                  <div className="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                    {assets
-                      .filter((a) => {
-                        if (!masterSearch) return true;
-                        const q = masterSearch.toLowerCase();
-                        return (
-                          a.serialNumber.toLowerCase().includes(q) ||
-                          a.model.toLowerCase().includes(q) ||
-                          a.customerName.toLowerCase().includes(q) ||
-                          (a.manufacturer || '').toLowerCase().includes(q)
-                        );
-                      })
-                      .slice(0, 15)
-                      .map((a) => {
-                        const isSelected = selectedMasterAsset?.id === a.id;
-                        return (
-                          <div
-                            key={a.id}
-                            onClick={() => handleSelectMasterAsset(a)}
-                            className={`p-2 text-xs cursor-pointer flex items-center justify-between transition-colors ${
-                              isSelected
-                                ? 'bg-[#1D3557] text-white font-bold'
-                                : 'hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200'
-                            }`}
-                          >
-                            <div className="truncate mr-2">
-                              <div className="font-mono font-bold">{a.serialNumber} — {a.model}</div>
-                              <div className={`text-[10px] ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
-                                {a.customerName} | Dept: {a.department}
+                    {/* Master Assets List Selection Box */}
+                    <div className="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+                      {assets
+                        .filter((a) => {
+                          if (!masterSearch) return true;
+                          const q = masterSearch.toLowerCase();
+                          return (
+                            a.serialNumber.toLowerCase().includes(q) ||
+                            a.model.toLowerCase().includes(q) ||
+                            a.customerName.toLowerCase().includes(q) ||
+                            (a.manufacturer || '').toLowerCase().includes(q)
+                          );
+                        })
+                        .slice(0, 15)
+                        .map((a) => {
+                          const isSelected = selectedMasterAsset?.id === a.id;
+                          return (
+                            <div
+                              key={a.id}
+                              onClick={() => handleSelectMasterAsset(a)}
+                              className={`p-2 text-xs cursor-pointer flex items-center justify-between transition-colors ${
+                                isSelected
+                                  ? 'bg-[#1D3557] text-white font-bold'
+                                  : 'hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200'
+                              }`}
+                            >
+                              <div className="truncate mr-2">
+                                <div className="font-mono font-bold">{a.serialNumber} — {a.model}</div>
+                                <div className={`text-[10px] ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
+                                  {a.customerName} | Dept: {a.department}
+                                </div>
                               </div>
+                              {isSelected && (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                              )}
                             </div>
-                            {isSelected && (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                            )}
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                    </div>
                   </div>
-                </div>
 
-                {selectedMasterAsset && (
-                  <>
-                    {/* Selected Asset Banner */}
-                    <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-900 text-xs">
-                      <div className="font-bold text-blue-950 dark:text-blue-200">
-                        Selected: {selectedMasterAsset.manufacturer} {selectedMasterAsset.model}
-                      </div>
-                      <div className="text-[11px] text-blue-800 dark:text-blue-300 font-mono">
-                        S/N: {selectedMasterAsset.serialNumber} | Customer: {selectedMasterAsset.customerName}
-                      </div>
-                    </div>
-
-                    {/* Frequency Selector */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        PPM Interval / Frequency:
-                      </label>
-                      <div className="grid grid-cols-4 gap-2">
-                        {(['3 Months', '6 Months', '1 Year', 'None'] as PpmFrequency[]).map((freq) => (
-                          <button
-                            key={freq}
-                            type="button"
-                            onClick={() => {
-                              setMasterFrequency(freq);
-                              if (freq !== 'None') {
-                                const baseDate = masterLastPpmDate || new Date().toISOString().split('T')[0];
-                                setMasterNextPpmDate(calculateNextPpmDate(baseDate, freq));
-                              } else {
-                                setMasterNextPpmDate('');
-                              }
-                            }}
-                            className={`py-2 px-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border text-center ${
-                              masterFrequency === freq
-                                ? 'bg-[#1D3557] text-white border-[#1D3557] shadow-xs'
-                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
-                            }`}
-                          >
-                            {freq}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* PPM Type Selector */}
-                    {masterFrequency !== 'None' && (
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                          PPM Maintenance Classification:
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setMasterPpmType('Yearly Maintenance')}
-                            className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
-                              masterPpmType === 'Yearly Maintenance'
-                                ? 'bg-[#1D3557] text-white border-[#1D3557] shadow-xs'
-                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
-                            }`}
-                          >
-                            <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">1</span>
-                            <span>1 - Yearly Maintenance</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setMasterPpmType('Routine Checkup')}
-                            className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
-                              masterPpmType === 'Routine Checkup'
-                                ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
-                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
-                            }`}
-                          >
-                            <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">2</span>
-                            <span>2 - Routine Checkup</span>
-                          </button>
+                  {selectedMasterAsset && (
+                    <>
+                      {/* Selected Asset Banner */}
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-900 text-xs">
+                        <div className="font-bold text-blue-950 dark:text-blue-200">
+                          Selected: {selectedMasterAsset.manufacturer} {selectedMasterAsset.model}
+                        </div>
+                        <div className="text-[11px] text-blue-800 dark:text-blue-300 font-mono">
+                          S/N: {selectedMasterAsset.serialNumber} | Customer: {selectedMasterAsset.customerName}
                         </div>
                       </div>
-                    )}
 
-                    {/* Dates */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Frequency Selector */}
                       <div>
                         <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                          Last PPM Date:
+                          PPM Interval / Frequency:
                         </label>
-                        <input
-                          type="date"
-                          value={masterLastPpmDate}
-                          onChange={(e) => {
-                            setMasterLastPpmDate(e.target.value);
-                            if (masterFrequency !== 'None') {
-                              setMasterNextPpmDate(calculateNextPpmDate(e.target.value, masterFrequency));
-                            }
-                          }}
-                          className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
-                        />
+                        <div className="grid grid-cols-4 gap-2">
+                          {(['3 Months', '6 Months', '1 Year', 'None'] as PpmFrequency[]).map((freq) => (
+                            <button
+                              key={freq}
+                              type="button"
+                              onClick={() => {
+                                setMasterFrequency(freq);
+                                if (freq !== 'None') {
+                                  const baseDate = masterLastPpmDate || new Date().toISOString().split('T')[0];
+                                  setMasterNextPpmDate(calculateNextPpmDate(baseDate, freq));
+                                } else {
+                                  setMasterNextPpmDate('');
+                                }
+                              }}
+                              className={`py-2 px-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border text-center ${
+                                masterFrequency === freq
+                                  ? 'bg-[#1D3557] text-white border-[#1D3557] shadow-xs'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                              }`}
+                            >
+                              {freq}
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                          Next PPM Target Due Date:
-                        </label>
-                        <input
-                          type="date"
-                          value={masterNextPpmDate}
-                          onChange={(e) => setMasterNextPpmDate(e.target.value)}
-                          className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
+                      {/* PPM Type Selector */}
+                      {masterFrequency !== 'None' && (
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            PPM Maintenance Classification:
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setMasterPpmType('Yearly Maintenance')}
+                              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                                masterPpmType === 'Yearly Maintenance'
+                                  ? 'bg-[#1D3557] text-white border-[#1D3557] shadow-xs'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                              }`}
+                            >
+                              <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">1</span>
+                              <span>1 - Yearly Maintenance</span>
+                            </button>
 
-                {/* Modal Buttons */}
-                <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                            <button
+                              type="button"
+                              onClick={() => setMasterPpmType('Routine Checkup')}
+                              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                                masterPpmType === 'Routine Checkup'
+                                  ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                              }`}
+                            >
+                              <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">2</span>
+                              <span>2 - Routine Checkup</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Dates */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Last PPM Date:
+                          </label>
+                          <input
+                            type="date"
+                            value={masterLastPpmDate}
+                            onChange={(e) => {
+                              setMasterLastPpmDate(e.target.value);
+                              if (masterFrequency !== 'None') {
+                                setMasterNextPpmDate(calculateNextPpmDate(e.target.value, masterFrequency));
+                              }
+                            }}
+                            className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Next PPM Target Due Date:
+                          </label>
+                          <input
+                            type="date"
+                            value={masterNextPpmDate}
+                            onChange={(e) => setMasterNextPpmDate(e.target.value)}
+                            className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Modal Buttons Sticky Footer */}
+                <div className="shrink-0 px-4 py-3 sm:px-6 sm:py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={() => setIsScheduleMasterModalOpen(false)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                    className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                   >
-                    Cancel
+                    Close
                   </button>
+
                   <button
                     type="submit"
                     disabled={!selectedMasterAsset}
-                    className={`px-4 py-2 text-xs font-black rounded-lg shadow-md flex items-center space-x-1.5 cursor-pointer ${
+                    className={`px-5 py-2.5 text-xs font-black rounded-lg shadow-md flex items-center space-x-1.5 cursor-pointer transition-all ${
                       selectedMasterAsset
                         ? 'bg-[#1D3557] hover:bg-[#152740] text-white'
                         : 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'
                     }`}
                   >
                     <Check className="w-4 h-4" />
-                    <span>Save PPM Schedule</span>
+                    <span>SAVE PPM SCHEDULE</span>
                   </button>
                 </div>
               </form>

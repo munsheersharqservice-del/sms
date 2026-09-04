@@ -190,7 +190,7 @@ export const MyDeskView: React.FC = () => {
   };
 
   // Base cases scoped to role
-  const baseCases = isAdmin
+  const scopedCases = isAdmin
     ? adminEngineerFilter === 'ALL'
       ? cases
       : cases.filter(
@@ -199,6 +199,13 @@ export const MyDeskView: React.FC = () => {
             c.assignedEngineerId?.toLowerCase() === adminEngineerFilter.toLowerCase()
         )
     : assignedCases;
+
+  // STRICT REQUIREMENT: Do NOT show done work in My Desk.
+  // My Desk strictly displays active workload (New, Running, Pending).
+  // Completed / Done cases belong in "Completed Work Logs & Service Reports".
+  const baseCases = useMemo(() => {
+    return scopedCases.filter((c) => c.status !== 'Done' && (c.status as string) !== 'Closed');
+  }, [scopedCases]);
 
   // Filter cases for display
   const displayedCases = baseCases.filter((c) => {
@@ -600,16 +607,15 @@ export const MyDeskView: React.FC = () => {
           </div>
         </div>
 
-        {/* Status Tabs - Sleek & Compact */}
+        {/* Status Tabs - Sleek & Compact - Active Workflow Only */}
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar">
           <div className="flex items-center gap-1 p-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0">
             {(
               [
-                { id: 'ALL', label: 'ALL', count: baseCases.length, activeBg: 'bg-slate-900 dark:bg-slate-700 text-white shadow-2xs' },
+                { id: 'ALL', label: 'ALL ACTIVE', count: baseCases.length, activeBg: 'bg-slate-900 dark:bg-slate-700 text-white shadow-2xs' },
                 { id: 'New', label: 'New', count: baseCases.filter(c => c.status === 'New').length, activeBg: 'bg-blue-600 text-white shadow-2xs' },
                 { id: 'Running', label: 'Running', count: baseCases.filter(c => c.status === 'Running').length, activeBg: 'bg-teal-600 text-white shadow-2xs' },
                 { id: 'Pending', label: 'Pending', count: baseCases.filter(c => c.status === 'Pending').length, activeBg: 'bg-amber-600 text-white shadow-2xs' },
-                { id: 'Done', label: 'Done', count: baseCases.filter(c => c.status === 'Done').length, activeBg: 'bg-emerald-600 text-white shadow-2xs' },
               ] as const
             ).map((tab) => (
               <button
@@ -630,6 +636,17 @@ export const MyDeskView: React.FC = () => {
                 </span>
               </button>
             ))}
+
+            {/* Quick access link to Completed Work Logs */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('done_work')}
+              className="px-2.5 sm:px-3 py-1 rounded-md text-[11px] sm:text-xs font-bold transition-all flex items-center space-x-1 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 cursor-pointer ml-1 whitespace-nowrap"
+              title="Open Completed Work Logs & Service Reports"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Completed Work Logs →</span>
+            </button>
           </div>
 
           <div className="relative w-full max-w-xs hidden sm:block">
@@ -732,12 +749,43 @@ export const MyDeskView: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="flex items-center space-x-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                    <span>Assigned to:</span>
-                    <strong className="text-slate-900 dark:text-white font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.2 rounded-md">
-                      {sc.assignedEngineerName}
-                    </strong>
-                  </div>
+                  {isAdmin ? (
+                    <div className="flex items-center space-x-1.5 text-[11px]" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-slate-500 dark:text-slate-400 font-bold">Assigned to:</span>
+                      <select
+                        value={sc.assignedEngineerName || ''}
+                        onChange={(e) => {
+                          const selectedEngName = e.target.value;
+                          const engUser = users.find((u) => u.name.trim().toUpperCase() === selectedEngName.trim().toUpperCase());
+                          const engId = engUser ? engUser.id : `eng-${selectedEngName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                          updateCase(sc.id, {
+                            assignedEngineerName: selectedEngName,
+                            assignedEngineerId: engId,
+                          });
+                          setActionSuccessMsg(`Case #${sc.ticketNumber} reassigned to Eng. ${selectedEngName}`);
+                          setTimeout(() => setActionSuccessMsg(null), 3500);
+                        }}
+                        className="text-xs font-bold bg-teal-50 dark:bg-teal-950/80 text-teal-900 dark:text-teal-200 border border-teal-300 dark:border-teal-700 rounded-md px-2 py-0.5 focus:ring-1 focus:ring-teal-500 cursor-pointer"
+                        title="Admin: Change assigned engineer"
+                      >
+                        {users
+                          .filter((u) => u.role !== 'Admin' && u.name.trim().toUpperCase() !== 'ADMIN')
+                          .map((u) => (
+                            <option key={u.id} value={u.name}>
+                              Eng. {u.name}
+                            </option>
+                          ))}
+                        <option value="ADMIN">ADMIN</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                      <span>Assigned to:</span>
+                      <strong className="text-slate-900 dark:text-white font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.2 rounded-md">
+                        {sc.assignedEngineerName}
+                      </strong>
+                    </div>
+                  )}
                 </div>
 
                 {/* Main Details Grid */}
@@ -1490,7 +1538,38 @@ export const MyDeskView: React.FC = () => {
                         </div>
                         <div>
                           <span className="text-slate-400 font-bold block text-[9px] uppercase">Engineer:</span>
-                          <span className="font-bold text-black">{selectedCaseForAction.assignedEngineerName || currentUser?.name}</span>
+                          {isAdmin ? (
+                            <select
+                              value={selectedCaseForAction.assignedEngineerName || ''}
+                              onChange={(e) => {
+                                const newEngName = e.target.value;
+                                const engUser = users.find((u) => u.name.trim().toUpperCase() === newEngName.trim().toUpperCase());
+                                const engId = engUser ? engUser.id : `eng-${newEngName.toLowerCase()}`;
+                                setSelectedCaseForAction({
+                                  ...selectedCaseForAction,
+                                  assignedEngineerName: newEngName,
+                                  assignedEngineerId: engId,
+                                });
+                                updateCase(selectedCaseForAction.id, {
+                                  assignedEngineerName: newEngName,
+                                  assignedEngineerId: engId,
+                                });
+                              }}
+                              className="text-xs font-bold bg-teal-50 text-teal-900 border border-teal-300 rounded px-1.5 py-0.5 mt-0.5 cursor-pointer"
+                              title="Admin: Change assigned engineer"
+                            >
+                              {users
+                                .filter((u) => u.role !== 'Admin' && u.name.trim().toUpperCase() !== 'ADMIN')
+                                .map((u) => (
+                                  <option key={u.id} value={u.name}>
+                                    Eng. {u.name}
+                                  </option>
+                                ))}
+                              <option value="ADMIN">ADMIN</option>
+                            </select>
+                          ) : (
+                            <span className="font-bold text-black">{selectedCaseForAction.assignedEngineerName || currentUser?.name}</span>
+                          )}
                         </div>
                         <div>
                           <span className="text-slate-400 font-bold block text-[9px] uppercase">Warranty:</span>

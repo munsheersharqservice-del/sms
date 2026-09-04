@@ -592,18 +592,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const isRealModeV6 = localStorage.getItem('sharq_real_mode_v6');
     if (!isRealModeV6) {
-      localStorage.removeItem('sharq_v3_assets');
-      localStorage.removeItem('sharq_v3_cases');
-      localStorage.removeItem('sharq_v3_done_work');
-      localStorage.removeItem('sharq_v3_requests');
-      localStorage.removeItem('sharq_v3_projects');
-      localStorage.removeItem('sharq_v3_software_licenses');
-      localStorage.removeItem('sharq_v3_spare_parts');
-      localStorage.removeItem('sharq_v3_customers');
-      localStorage.removeItem('sharq_v3_manufacturer_models');
       localStorage.setItem('sharq_real_mode_v6', 'true');
     }
   }, []);
+
+  // Helper to get all permanently closed ticket keys from persistent storage
+  const getClosedTicketsSet = (): Set<string> => {
+    const set = new Set<string>();
+    try {
+      const raw = localStorage.getItem('sharq_closed_tickets');
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          arr.forEach((k: string) => {
+            const clean = String(k).trim().toUpperCase();
+            if (clean) {
+              set.add(clean);
+              const num = clean.replace(/[^0-9]/g, '');
+              if (num) {
+                set.add(num);
+                set.add(`TK-${num}`);
+                set.add(`TK${num}`);
+              }
+            }
+          });
+        }
+      }
+    } catch {}
+    return set;
+  };
+
+  const markTicketAsClosed = (ticketOrId?: string) => {
+    if (!ticketOrId) return;
+    const clean = String(ticketOrId).trim().toUpperCase();
+    if (!clean) return;
+    try {
+      const current = getClosedTicketsSet();
+      current.add(clean);
+      const num = clean.replace(/[^0-9]/g, '');
+      if (num) {
+        current.add(num);
+        current.add(`TK-${num}`);
+        current.add(`TK${num}`);
+      }
+      localStorage.setItem('sharq_closed_tickets', JSON.stringify(Array.from(current)));
+    } catch {}
+  };
 
   // Google OAuth State
   const [googleUser, setGoogleUser] = useState<FirebaseUser | null>(() => getCurrentGoogleUser());
@@ -704,13 +738,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [softwareLicenses, setSoftwareLicenses] = useState<SoftwareLicense[]>([]);
 
   // 6. Assets / Equipment (Single Source of Truth: Live Database / Excel)
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<Asset[]>(() => {
+    try {
+      const saved = localStorage.getItem('sharq_v3_assets');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
 
   // 7. Service Cases (Single Source of Truth: Live Database / Excel)
-  const [cases, setCases] = useState<ServiceCase[]>([]);
+  const [cases, setCases] = useState<ServiceCase[]>(() => {
+    try {
+      const saved = localStorage.getItem('sharq_v3_cases');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
 
   // 8. Done Work Logs (Single Source of Truth: Live Database / Excel)
-  const [doneWorkLogs, setDoneWorkLogs] = useState<DoneWorkLog[]>([]);
+  const [doneWorkLogs, setDoneWorkLogs] = useState<DoneWorkLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('sharq_v3_done_work');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
+  // Keep local caches in sync with memory
+  useEffect(() => {
+    if (cases && cases.length > 0) {
+      try {
+        localStorage.setItem('sharq_v3_cases', JSON.stringify(cases));
+      } catch {}
+    }
+  }, [cases]);
+
+  useEffect(() => {
+    if (doneWorkLogs && doneWorkLogs.length > 0) {
+      try {
+        localStorage.setItem('sharq_v3_done_work', JSON.stringify(doneWorkLogs));
+      } catch {}
+    }
+  }, [doneWorkLogs]);
+
+  useEffect(() => {
+    if (assets && assets.length > 0) {
+      try {
+        localStorage.setItem('sharq_v3_assets', JSON.stringify(assets));
+      } catch {}
+    }
+  }, [assets]);
 
   // 9. Requisitions (Single Source of Truth: Live Database / Excel)
   const [requests, setRequests] = useState<RequestItem[]>([]);
@@ -1615,12 +1701,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let updatedCaseObj: ServiceCase | null = null;
     let oldAssignedEngineer: string | undefined;
 
+    const isMarkedDone = updates.status === 'Done' || (updates.status as string) === 'Closed';
+
     setCases((prev) =>
       prev.map((c) => {
         const targetKey = String(caseId).trim().toUpperCase();
-        const match = c.id === caseId ||
-          (c.ticketNumber && String(c.ticketNumber).trim().toUpperCase() === targetKey) ||
-          (c.caseNumber && String(c.caseNumber).trim().toUpperCase() === targetKey);
+        const targetNumOnly = targetKey.replace(/[^0-9]/g, '');
+        const cTicket = String(c.ticketNumber || c.caseNumber || '').trim().toUpperCase();
+        const cNumOnly = cTicket.replace(/[^0-9]/g, '');
+
+        const match =
+          c.id === caseId ||
+          (cTicket && cTicket === targetKey) ||
+          (cNumOnly && targetNumOnly && cNumOnly === targetNumOnly);
 
         if (match) {
           oldAssignedEngineer = c.assignedEngineerName;
@@ -1648,6 +1741,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return c;
       })
     );
+
+    if (isMarkedDone) {
+      markTicketAsClosed(caseId);
+      if (updatedCaseObj) {
+        markTicketAsClosed((updatedCaseObj as ServiceCase).ticketNumber);
+        markTicketAsClosed((updatedCaseObj as ServiceCase).id);
+      }
+    }
 
     if (updatedCaseObj) {
       pushCaseToGoogleSheet(updatedCaseObj);
@@ -1684,7 +1785,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       serialNumber: (workData.serialNumber || 'N/A').trim().toUpperCase(),
       model: (workData.model || 'EQUIPMENT').trim().toUpperCase(),
     };
+
+    // Permanently mark ticket closed
+    markTicketAsClosed(newLog.ticketNumber);
+    markTicketAsClosed(newLog.caseNumber);
+    markTicketAsClosed(newLog.caseId);
+
     setDoneWorkLogs((prev) => [newLog, ...prev]);
+
+    // Also ensure matching case in cases state is set to Done
+    const targetTk = (newLog.ticketNumber || newLog.caseNumber || '').trim().toUpperCase();
+    const targetNum = targetTk.replace(/[^0-9]/g, '');
+    setCases((prevCases) =>
+      prevCases.map((c) => {
+        const cTk = (c.ticketNumber || c.caseNumber || '').trim().toUpperCase();
+        const cNum = cTk.replace(/[^0-9]/g, '');
+        if (
+          (newLog.caseId && c.id === newLog.caseId) ||
+          (targetTk && cTk === targetTk) ||
+          (targetNum && cNum && targetNum === cNum)
+        ) {
+          return {
+            ...c,
+            status: 'Done',
+            serviceReportNumber: newLog.serviceReportNumber || c.serviceReportNumber,
+            serviceReportDriveLink: newLog.serviceReportDriveLink || c.serviceReportDriveLink,
+            closeDate: newLog.dateCompleted || new Date().toISOString().split('T')[0],
+            remarks: newLog.workDoneSummary || c.remarks,
+          };
+        }
+        return c;
+      })
+    );
 
     // Push done work to Google Sheets directly
     getAccessToken().then((token) => {
@@ -1972,31 +2104,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const data = await fetchLiveDataFromGoogleSheets(activeId);
       if (data) {
         // 1. Done Work Logs & Done Tickets Index
-        const currentDoneTickets = new Set<string>();
+        const currentDoneTickets = getClosedTicketsSet();
+
         if (Array.isArray(data.doneWorkLogs)) {
+          data.doneWorkLogs.forEach((dw: any) => {
+            const tk = String(dw.ticketNumber || dw.caseNumber || dw.id || '').trim().toUpperCase();
+            if (tk) {
+              currentDoneTickets.add(tk);
+              const num = tk.replace(/[^0-9]/g, '');
+              if (num) {
+                currentDoneTickets.add(num);
+                currentDoneTickets.add(`TK-${num}`);
+                currentDoneTickets.add(`TK${num}`);
+              }
+            }
+          });
+
           const remoteDone = sanitizeDoneWorkList(data.doneWorkLogs);
           setDoneWorkLogs((prevLogs) => {
             const pendingLogs = prevLogs.filter((pl) => {
               const pKey = (pl.ticketNumber || pl.caseNumber || pl.id || '').trim().toUpperCase();
               return !remoteDone.some((rl) => (rl.ticketNumber || rl.caseNumber || rl.id || '').trim().toUpperCase() === pKey);
             });
-            const merged = sanitizeDoneWorkList([...pendingLogs, ...remoteDone]);
-            merged.forEach((dw) => {
-              const tk = (dw.ticketNumber || dw.caseNumber || '').trim().toUpperCase();
-              if (tk) currentDoneTickets.add(tk);
-            });
-            return merged;
+            return sanitizeDoneWorkList([...pendingLogs, ...remoteDone]);
           });
         }
 
-        // 2. Service Cases: Master Database is Single Source of Truth
+        // 2. Service Cases: Master Database with permanent Done retention
         if (Array.isArray(data.cases)) {
           setCases((prevCases) => {
             // Also collect tickets marked Done locally in prevCases
             prevCases.forEach((pc) => {
-              if (pc.status === 'Done') {
-                const tk = (pc.ticketNumber || pc.caseNumber || '').trim().toUpperCase();
-                if (tk) currentDoneTickets.add(tk);
+              if (pc.status === 'Done' || (pc.status as string) === 'Closed') {
+                const tk = String(pc.ticketNumber || pc.caseNumber || pc.id || '').trim().toUpperCase();
+                if (tk) {
+                  currentDoneTickets.add(tk);
+                  const num = tk.replace(/[^0-9]/g, '');
+                  if (num) {
+                    currentDoneTickets.add(num);
+                    currentDoneTickets.add(`TK-${num}`);
+                    currentDoneTickets.add(`TK${num}`);
+                  }
+                }
               }
             });
 
@@ -2004,26 +2153,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
             // Merge with prevCases: if local was Done, retain Done status and report details!
             const mergedRemote = remoteCases.map((rc) => {
-              const rTicket = (rc.ticketNumber || rc.caseNumber || '').trim().toUpperCase();
-              const matchingLocal = prevCases.find((lc) =>
-                (rTicket && (lc.ticketNumber || lc.caseNumber || '').trim().toUpperCase() === rTicket) ||
-                (rc.id && lc.id === rc.id)
-              );
+              const rTicket = String(rc.ticketNumber || rc.caseNumber || '').trim().toUpperCase();
+              const rTicketNum = rTicket.replace(/[^0-9]/g, '');
 
-              if (matchingLocal && matchingLocal.status === 'Done' && rc.status !== 'Done') {
+              const matchingLocal = prevCases.find((lc) => {
+                const lTicket = String(lc.ticketNumber || lc.caseNumber || '').trim().toUpperCase();
+                const lTicketNum = lTicket.replace(/[^0-9]/g, '');
+                return (
+                  (rTicket && lTicket && rTicket === lTicket) ||
+                  (rTicketNum && lTicketNum && rTicketNum === lTicketNum) ||
+                  (rc.id && lc.id === rc.id)
+                );
+              });
+
+              const isClosed =
+                (rTicket && currentDoneTickets.has(rTicket)) ||
+                (rTicketNum && currentDoneTickets.has(rTicketNum)) ||
+                (rTicketNum && currentDoneTickets.has(`TK-${rTicketNum}`)) ||
+                (rc.id && currentDoneTickets.has(String(rc.id).trim().toUpperCase())) ||
+                matchingLocal?.status === 'Done' ||
+                rc.status === 'Done';
+
+              if (isClosed) {
                 return {
                   ...rc,
                   status: 'Done' as const,
-                  serviceReportNumber: matchingLocal.serviceReportNumber || rc.serviceReportNumber,
-                  serviceReportDriveLink: matchingLocal.serviceReportDriveLink || rc.serviceReportDriveLink,
-                  closeDate: matchingLocal.closeDate || rc.closeDate,
-                  remarks: matchingLocal.remarks || rc.remarks,
-                };
-              }
-              if (rTicket && currentDoneTickets.has(rTicket)) {
-                return {
-                  ...rc,
-                  status: 'Done' as const,
+                  serviceReportNumber: matchingLocal?.serviceReportNumber || rc.serviceReportNumber,
+                  serviceReportDriveLink: matchingLocal?.serviceReportDriveLink || rc.serviceReportDriveLink,
+                  closeDate: matchingLocal?.closeDate || rc.closeDate || new Date().toISOString().split('T')[0],
+                  remarks: matchingLocal?.remarks || rc.remarks,
+                  customerSignatoryName: matchingLocal?.customerSignatoryName || rc.customerSignatoryName,
                 };
               }
               return rc;
@@ -2031,11 +2190,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
             // Retain any locally created or pending cases that have not yet reached remote
             const pendingLocals = prevCases.filter((lc) => {
-              const ticketKey = (lc.ticketNumber || lc.caseNumber || '').trim().toUpperCase();
-              const inRemote = mergedRemote.some((rc) => 
-                (ticketKey && (rc.ticketNumber || rc.caseNumber || '').trim().toUpperCase() === ticketKey) || 
-                (rc.id && rc.id === lc.id)
-              );
+              const ticketKey = String(lc.ticketNumber || lc.caseNumber || '').trim().toUpperCase();
+              const ticketNum = ticketKey.replace(/[^0-9]/g, '');
+              const inRemote = mergedRemote.some((rc) => {
+                const rTicket = String(rc.ticketNumber || rc.caseNumber || '').trim().toUpperCase();
+                const rTicketNum = rTicket.replace(/[^0-9]/g, '');
+                return (
+                  (ticketKey && rTicket && ticketKey === rTicket) ||
+                  (ticketNum && rTicketNum && ticketNum === rTicketNum) ||
+                  (rc.id && rc.id === lc.id)
+                );
+              });
               return !inRemote;
             });
 
@@ -2193,18 +2358,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // 1. Initial fetch on startup (clean out any legacy local caches)
+  // 1. Initial fetch on startup
   useEffect(() => {
-    localStorage.removeItem('sharq_v3_customers');
-    localStorage.removeItem('sharq_v3_spare_parts');
-    localStorage.removeItem('sharq_v3_software_licenses');
-    localStorage.removeItem('sharq_v3_assets');
-    localStorage.removeItem('sharq_v3_cases');
-    localStorage.removeItem('sharq_v3_done_work');
-    localStorage.removeItem('sharq_v3_requests');
-    localStorage.removeItem('sharq_v3_projects');
-    localStorage.removeItem('sharq_v3_manufacturer_models');
-
     refreshFromGoogleSheets(false);
   }, []);
 

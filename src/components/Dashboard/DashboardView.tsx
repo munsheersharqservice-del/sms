@@ -19,6 +19,8 @@ export const DashboardView: React.FC = () => {
     cases,
     projects,
     users,
+    isAdmin,
+    updateCase,
     setActiveTab,
     setSelectedProjectId,
     sheetsSyncStatus,
@@ -479,7 +481,38 @@ export const DashboardView: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-slate-400 text-[9px] uppercase block font-bold">Assigned Engineer</span>
-                    <span className="font-bold text-teal-300 text-xs">Eng. {selectedCaseDetail.assignedEngineerName}</span>
+                    {isAdmin ? (
+                      <select
+                        value={selectedCaseDetail.assignedEngineerName || ''}
+                        onChange={(e) => {
+                          const newEngName = e.target.value;
+                          const engUser = users.find((u) => u.name.trim().toUpperCase() === newEngName.trim().toUpperCase());
+                          const engId = engUser ? engUser.id : `eng-${newEngName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                          updateCase(selectedCaseDetail.id, {
+                            assignedEngineerName: newEngName,
+                            assignedEngineerId: engId,
+                          });
+                          setSelectedCaseDetail({
+                            ...selectedCaseDetail,
+                            assignedEngineerName: newEngName,
+                            assignedEngineerId: engId,
+                          });
+                        }}
+                        className="text-xs font-bold bg-slate-800 text-teal-300 border border-teal-500/50 rounded px-1.5 py-0.5 mt-0.5 cursor-pointer"
+                        title="Admin: Change assigned engineer"
+                      >
+                        {users
+                          .filter((u) => u.role !== 'Admin' && u.name.trim().toUpperCase() !== 'ADMIN')
+                          .map((u) => (
+                            <option key={u.id} value={u.name}>
+                              Eng. {u.name}
+                            </option>
+                          ))}
+                        <option value="ADMIN">ADMIN</option>
+                      </select>
+                    ) : (
+                      <span className="font-bold text-teal-300 text-xs">Eng. {selectedCaseDetail.assignedEngineerName}</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-slate-400 text-[9px] uppercase block font-bold">Equipment & Serial</span>
