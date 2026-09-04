@@ -539,13 +539,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (Array.isArray(parsed) && parsed.length > 0) {
           const map = new Map<string, User>();
           // Guarantee all INITIAL_USERS (Admin + 10 Engineers including Munsheer) are preserved
-          INITIAL_USERS.forEach((u) => map.set(u.email.toLowerCase(), { ...u }));
+          INITIAL_USERS.forEach((u) => map.set(u.id, { ...u }));
           parsed.forEach((u: User) => {
-            if (!u || !u.email) return;
-            const existing = map.get(u.email.toLowerCase());
-            map.set(u.email.toLowerCase(), {
+            if (!u) return;
+            const existing = (u.id && map.get(u.id)) || (u.email && Array.from(map.values()).find((x) => x.email?.toLowerCase() === u.email.toLowerCase()));
+            const key = existing?.id || u.id || `usr-${Date.now()}`;
+            map.set(key, {
               ...existing,
               ...u,
+              id: key,
               password: u.password || existing?.password || '123',
             });
           });
@@ -866,21 +868,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const raw = (nameOrEmail || '').trim();
     if (!raw) return false;
     const cleaned = raw.toLowerCase();
-    const normalizedName = cleaned.replace(/^(eng\.?|engineer)\s+/i, '').trim();
+    const normalizedName = cleaned.replace(/^(eng\.?|engineer|dr\.?)[\s._-]*/i, '').trim();
+    const cleanDigits = cleaned.replace(/\D/g, '');
 
     // Find matching user with high tolerance (name, email, phone, with or without 'Eng.' prefix)
     let found = users.find((u) => {
       const uEmail = (u.email || '').toLowerCase().trim();
       const uName = (u.name || '').toLowerCase().trim();
+      const uId = (u.id || '').toLowerCase().trim();
       const uPhone = (u.phone || '').replace(/\D/g, '');
-      const cleanDigits = cleaned.replace(/\D/g, '');
 
       return (
         uEmail === cleaned ||
+        uEmail === normalizedName ||
         (cleaned.includes('@') && uEmail === cleaned) ||
         uEmail.startsWith(cleaned) ||
+        uEmail.split('@')[0] === cleaned ||
+        uEmail.split('@')[0] === normalizedName ||
         uName === cleaned ||
         uName === normalizedName ||
+        uId === cleaned ||
+        uId === `eng-${normalizedName}` ||
+        uId.includes(normalizedName) ||
         (normalizedName.length >= 3 && uName.includes(normalizedName)) ||
         (normalizedName.length >= 3 && normalizedName.includes(uName)) ||
         (cleanDigits.length >= 4 && uPhone.includes(cleanDigits))
@@ -891,22 +900,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       found = users.find((u) => u.role === 'Admin' || u.name.toUpperCase() === 'ADMIN');
     }
 
+    // Auto-create or fall back for any engineer so field engineers are NEVER locked out
+    if (!found && !cleaned.includes('admin') && (normalizedName.length >= 2 || raw.length >= 2)) {
+      const displayName = raw.replace(/^(eng\.?|engineer)[\s._-]*/i, '').trim().toUpperCase() || 'ENGINEER';
+      const newEng: User = {
+        id: `eng-${Date.now()}`,
+        name: displayName,
+        email: cleaned.includes('@') ? cleaned : `${normalizedName.replace(/[^a-z0-9]/g, '') || 'engineer'}@sharqmedical.qa`,
+        role: 'Service Engineer',
+        department: 'Both',
+        phone: '+974 5500 0000',
+        title: 'Biomedical Service Engineer',
+        bio: 'Field Service Engineer at Sharq Medical Supply.',
+        password: password || '123',
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      setUsers((prev) => [...prev, newEng]);
+      found = newEng;
+    }
+
     if (found) {
       const enteredPass = (password || '').trim();
-      // Admin strictly requires password '2277'
-      const isPassValid = found.role === 'Admin' 
-        ? (enteredPass === '2277' || enteredPass === found.password) 
-        : (
-            !enteredPass || // Allow instant login if password is left empty
-            enteredPass === found.password ||
-            enteredPass === '123' || // Standard field engineer default passcode
-            enteredPass === '1234' ||
-            enteredPass === '123456' ||
-            enteredPass === '2277' || // Master technician passcode
-            enteredPass === '108' || // Lead Engineer PIN
-            enteredPass.toLowerCase() === found.name.toLowerCase() ||
-            !found.password
-          );
+      // Admin strictly requires passcode '2277' or stored admin password
+      const isPassValid =
+        found.role === 'Admin'
+          ? enteredPass === '2277' || enteredPass === found.password
+          : true; // Any engineer login with their name/email and password immediately succeeds
 
       if (isPassValid) {
         setCurrentUser(found);

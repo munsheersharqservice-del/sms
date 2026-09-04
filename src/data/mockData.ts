@@ -138,7 +138,7 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'eng-shihad',
     name: 'SHIHAD',
-    email: 'services@sharq.qa',
+    email: 'shihad.sharqservice@gmail.com',
     role: 'Service Engineer',
     department: 'Both',
     phone: '+974 5500 0110',
