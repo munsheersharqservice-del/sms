@@ -176,7 +176,7 @@ export const DoneWorkView: React.FC = () => {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
+              <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white uppercase">
                 COMPLETED WORK LOGS & SERVICE REPORTS
               </h1>
               <span className="bg-[#4CAF50] text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
@@ -689,12 +689,29 @@ export const DoneWorkView: React.FC = () => {
 
               {/* ATTACHMENT UPLOADER FOR COMPLETED JOB CARD */}
               <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <DriveAttachmentUploader
-                  attachments={attachments}
-                  onChange={setAttachments}
-                  category="ServiceReport"
-                  label="Upload Signed Field Sheet / Equipment Photos (Google Drive)"
-                />
+                {(() => {
+                  const selCase = selectableCases.find((c) => c.id === selectedCaseId);
+                  const isPpm = selCase?.callType === 'PPM' || selCase?.workClassification === 'PPM';
+                  const customPpmName = isPpm && selCase
+                    ? (selCase.assetNumber
+                        ? `${selCase.serialNumber}(${selCase.assetNumber})-PPM`
+                        : `${selCase.serialNumber}-PPM`)
+                    : (selCase?.ticketNumber || '');
+                  return (
+                    <DriveAttachmentUploader
+                      attachments={attachments}
+                      onChange={setAttachments}
+                      category="ServiceReport"
+                      caseNumber={selCase?.ticketNumber}
+                      customFileName={customPpmName}
+                      label={
+                        isPpm
+                          ? `Upload PPM Hardcopy (Drive Filename: ${customPpmName || 'SERIAL NUMBER(ASSET NUMBER)-PPM'})`
+                          : "Upload Signed Field Sheet / Equipment Photos (Google Drive)"
+                      }
+                    />
+                  );
+                })()}
               </div>
 
               <div className="flex justify-end space-x-2 pt-2">

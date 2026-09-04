@@ -19,7 +19,7 @@ const MainContent: React.FC = () => {
   const { activeTab } = useApp();
 
   return (
-    <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 pt-2.5 sm:pt-3.5 pb-20 md:pb-6">
+    <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 pt-2.5 sm:pt-3.5 pb-24 md:pb-8">
       {activeTab === 'dashboard' && <DashboardView />}
       {activeTab === 'new_case' && <NewCaseView />}
       {activeTab === 'my_desk' && <MyDeskView />}

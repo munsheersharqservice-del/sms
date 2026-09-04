@@ -25,7 +25,7 @@ import {
   User as UserIcon,
   ShieldCheck,
 } from 'lucide-react';
-import { Department, WorkClassification, WarrantyStatus, Asset, AttachmentItem } from '../../types';
+import { Department, WorkClassification, WarrantyStatus, Asset, AttachmentItem, resolveCustomerSector, isGovernmentCustomer } from '../../types';
 import { DriveAttachmentUploader } from '../Common/DriveAttachmentUploader';
 import { SHARQ_GOOGLE_DRIVE_FOLDER_URL, uploadAttachmentToGoogleDrive } from '../../utils/googleDrive';
 import { DEFAULT_SPREADSHEET_URL } from '../../utils/googleSheets';
@@ -293,6 +293,7 @@ export const NewCaseView: React.FC = () => {
       ticketNumber: finalTicketNumber,
       caseNumber: caseReference.trim() || finalTicketNumber,
       customerName: customerFinal,
+      sector: resolveCustomerSector(customerFinal, selectedAsset?.sector),
       serialNumber: (selectedAsset?.serialNumber || 'N/A').toUpperCase(),
       model: (selectedAsset?.model || 'Medical / Dental System').toUpperCase(),
       department,
@@ -332,7 +333,7 @@ export const NewCaseView: React.FC = () => {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
+              <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white uppercase">
                 NEW SERVICE CALL DISPATCH
               </h1>
               <span className="bg-[#4CAF50] text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
@@ -919,7 +920,7 @@ export const NewCaseView: React.FC = () => {
                 onChange={setAttachments}
                 category="Attachment"
                 caseNumber={activeTicketNumber}
-                label="Support Attachment / Photo (Optional - Saved Directly to Sharq Google Drive)"
+                label={`Support Attachment / Photo (Saved to Google Drive as Ticket #${activeTicketNumber})`}
                 maxFiles={5}
               />
             </div>

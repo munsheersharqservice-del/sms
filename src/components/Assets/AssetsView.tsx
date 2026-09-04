@@ -276,7 +276,7 @@ export const AssetsView: React.FC = () => {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
+              <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white uppercase">
                 EQUIPMENT & ASSET DIRECTORY
               </h1>
               <span className="bg-indigo-600 text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">

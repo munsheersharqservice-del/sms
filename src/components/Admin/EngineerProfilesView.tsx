@@ -138,12 +138,9 @@ export const EngineerProfilesView: React.FC = () => {
                 Team Management
               </span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
+            <h1 className="text-sm sm:text-base font-bold text-white tracking-tight uppercase">
               Field Service Engineer Profiles
             </h1>
-            <p className="text-xs text-slate-300 mt-0.5">
-              Manage credentials, assigned workloads, contact records, and live field performance for all 10 Sharq service engineers.
-            </p>
           </div>
         </div>
 

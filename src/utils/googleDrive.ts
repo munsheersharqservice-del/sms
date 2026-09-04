@@ -1,8 +1,8 @@
 import { AttachmentItem } from '../types';
 import { getAccessToken, googleSignIn } from './firebaseAuth';
 
-export const SHARQ_GOOGLE_DRIVE_FOLDER_ID = '1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9';
-export const SHARQ_GOOGLE_DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?usp=drive_link';
+export const SHARQ_GOOGLE_DRIVE_FOLDER_ID = '';
+export const SHARQ_GOOGLE_DRIVE_FOLDER_URL = '';
 
 /**
  * Converts a base64 Data URL to a Blob
@@ -28,7 +28,7 @@ export async function directUploadBlobToGoogleDrive(
   fileName: string,
   mimeType: string,
   token: string,
-  folderId: string = SHARQ_GOOGLE_DRIVE_FOLDER_ID
+  folderId: string = ''
 ): Promise<{ fileId: string; webViewLink: string; success: boolean; error?: string }> {
   const boundary = `sharq_boundary_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
@@ -37,8 +37,8 @@ export async function directUploadBlobToGoogleDrive(
       name: fileName,
       mimeType: mimeType || 'application/octet-stream',
     };
-    if (targetParentId) {
-      metadata.parents = [targetParentId];
+    if (targetParentId && !targetParentId.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') && targetParentId.trim().length > 5) {
+      metadata.parents = [targetParentId.trim()];
     }
 
     const metadataPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`;
@@ -63,12 +63,11 @@ export async function directUploadBlobToGoogleDrive(
   };
 
   try {
-    // 1. Try uploading to specific Sharq Google Drive Folder
-    let res = await attempt(folderId);
+    const cleanFolder = folderId && !folderId.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') ? folderId : undefined;
+    let res = await attempt(cleanFolder);
 
-    // 2. If folder permission error (404/403/400), upload to user's root Google Drive
+    // If folder permission error (404/403/400), upload to user's root Google Drive
     if (!res.ok && (res.status === 404 || res.status === 403 || res.status === 400)) {
-      console.warn(`Drive upload into folder ${folderId} returned ${res.status}, retrying to root Drive...`);
       res = await attempt();
     }
 
@@ -113,14 +112,37 @@ export async function uploadAttachmentToGoogleDrive(
   file: File | Blob,
   fileName: string,
   category: 'ServiceReport' | 'Attachment' | 'JobCard' | 'AssetPassport' | 'Invoice' = 'Attachment',
-  caseNumber?: string
+  caseNumber?: string,
+  exactFileName: boolean = false
 ): Promise<AttachmentItem> {
   const fileId = `att_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
   const mimeType = (file as File).type || (fileName.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
   
-  // Format formatted file name with Case Number if present
-  const prefix = caseNumber ? `Case_${caseNumber}` : 'SHARQ';
-  const driveFileName = `[${prefix}_${category.toUpperCase()}] ${fileName}`;
+  // Format drive file name:
+  // 1. User requirement: NEW CASE ATTACHMENT DRIVE SAVING FILE NAME SHOULD PUT THE SAME TICKET NUMBER ONLY
+  // 2. If exactFileName is requested or if category is ServiceReport, keep the exact physical service report filename!
+  let driveFileName = fileName;
+  const fileExtension = fileName.includes('.') ? fileName.substring(fileName.lastIndexOf('.')) : '';
+
+  if (category === 'Attachment' && caseNumber) {
+    // Save to Google Drive strictly named as the ticket number only (e.g. 202615.pdf or 202615.jpg)
+    const cleanTicket = caseNumber.trim();
+    if (cleanTicket) {
+      if (fileName.startsWith(cleanTicket)) {
+        driveFileName = fileName;
+      } else {
+        driveFileName = `${cleanTicket}${fileExtension || '.pdf'}`;
+      }
+    }
+  } else if (!exactFileName && category !== 'ServiceReport') {
+    const prefix = caseNumber ? `Case_${caseNumber}` : 'SHARQ';
+    driveFileName = `[${prefix}_${category.toUpperCase()}] ${fileName}`;
+  } else {
+    // Ensure it has an extension
+    if (!driveFileName.includes('.')) {
+      driveFileName = `${driveFileName}.pdf`;
+    }
+  }
 
   // 1. Read file into base64 data URL for instant client-side preview & local storage
   const dataUrl = await new Promise<string>((resolve) => {

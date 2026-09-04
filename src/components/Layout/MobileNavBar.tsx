@@ -11,11 +11,11 @@ import {
   FolderGit2,
   Building2,
   MoreHorizontal,
-  FolderSync,
   FileSpreadsheet,
   X,
   Cloud,
   Download,
+  ExternalLink,
 } from 'lucide-react';
 import { analyzePpmStatus } from '../../utils/ppmUtils';
 import { SHARQ_GOOGLE_DRIVE_FOLDER_URL } from '../../utils/googleDrive';
@@ -61,168 +61,217 @@ export const MobileNavBar: React.FC = () => {
     };
   }, [isMoreOpen]);
 
-  const isMoreTabActive = ['ppm', 'customers', 'done_work', 'requests', 'projects'].includes(activeTab);
+  const isMoreTabActive = ['dashboard', 'customers', 'done_work', 'requests', 'projects', 'engineer_profiles'].includes(activeTab);
 
   return (
     <>
-      {/* More Menu Backdrop & Sheet Modal for Mobile */}
+      {/* More Menu Backdrop & Ergonomic Bottom Sheet for Mobile */}
       {isMoreOpen && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 md:hidden flex flex-col justify-end animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 md:hidden flex flex-col justify-end animate-in fade-in duration-200">
           <div
             ref={moreRef}
-            className={`rounded-t-2xl p-4 space-y-3 shadow-2xl border-t max-h-[80vh] overflow-y-auto ${
+            className={`rounded-t-3xl p-5 space-y-4 shadow-2xl border-t max-h-[85vh] overflow-y-auto safe-area-pb ${
               isDarkMode
                 ? 'bg-slate-900 border-slate-800 text-white'
                 : 'bg-white border-slate-200 text-slate-900'
             }`}
           >
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
-              <div className="flex items-center space-x-2">
-                <span className="font-black text-xs sm:text-sm">Navigation & Actions</span>
-                <span className="text-[9px] bg-orange-500/20 text-[#F26522] font-mono font-bold px-2 py-0.5 rounded-full">
-                  Quick Access
-                </span>
+            {/* Grab handle indicator */}
+            <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto -mt-1 mb-2" />
+
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white uppercase tracking-tight">
+                  All Modules & Quick Actions
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Switch view or access Google cloud sync
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsMoreOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-full cursor-pointer"
+                className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-full cursor-pointer transition-colors"
+                aria-label="Close menu"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Additional Views with Filled Colors */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('ppm');
-                  setIsMoreOpen(false);
-                }}
-                className={`relative flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                  activeTab === 'ppm'
-                    ? 'bg-amber-600 border-amber-500 text-white font-bold shadow-2xs'
-                    : isDarkMode
-                    ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                {ppmDueCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full">
-                    {ppmDueCount}
-                  </span>
-                )}
-                <CalendarCheck className={`w-4 h-4 mb-1 ${activeTab === 'ppm' ? 'text-white' : 'text-amber-500'}`} />
-                <span className="text-[11px] font-bold">PPM Due</span>
-              </button>
+            {/* Core Modules Grid with Comfortable Touch Targets */}
+            <div className="space-y-2">
+              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Workspace Sections
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {/* Dashboard / Home */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('dashboard');
+                    setIsMoreOpen(false);
+                  }}
+                  className={`flex items-center space-x-3 p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[50px] ${
+                    activeTab === 'dashboard'
+                      ? 'bg-[#1D3557] border-[#1D3557] text-white font-bold shadow-sm'
+                      : isDarkMode
+                      ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-750'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg ${activeTab === 'dashboard' ? 'bg-white/20' : 'bg-blue-500/15 text-blue-500'}`}>
+                    <LayoutDashboard className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight">Dashboard</div>
+                    <div className="text-[10px] opacity-75">Overview & stats</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('customers');
-                  setIsMoreOpen(false);
-                }}
-                className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                  activeTab === 'customers'
-                    ? 'bg-cyan-700 border-cyan-600 text-white font-bold shadow-2xs'
-                    : isDarkMode
-                    ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <Building2 className={`w-4 h-4 mb-1 ${activeTab === 'customers' ? 'text-white' : 'text-cyan-500'}`} />
-                <span className="text-[11px] font-bold">Customers</span>
-              </button>
+                {/* Customers */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('customers');
+                    setIsMoreOpen(false);
+                  }}
+                  className={`flex items-center space-x-3 p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[50px] ${
+                    activeTab === 'customers'
+                      ? 'bg-cyan-700 border-cyan-600 text-white font-bold shadow-sm'
+                      : isDarkMode
+                      ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-750'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg ${activeTab === 'customers' ? 'bg-white/20' : 'bg-cyan-500/15 text-cyan-500'}`}>
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight">Customers</div>
+                    <div className="text-[10px] opacity-75">HMC, PHCC & Private</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('done_work');
-                  setIsMoreOpen(false);
-                }}
-                className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                  activeTab === 'done_work'
-                    ? 'bg-emerald-600 border-emerald-500 text-white font-bold shadow-2xs'
-                    : isDarkMode
-                    ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <CheckCheck className={`w-4 h-4 mb-1 ${activeTab === 'done_work' ? 'text-white' : 'text-emerald-500'}`} />
-                <span className="text-[11px] font-bold">Done Work</span>
-              </button>
+                {/* Done Work */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('done_work');
+                    setIsMoreOpen(false);
+                  }}
+                  className={`flex items-center space-x-3 p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[50px] ${
+                    activeTab === 'done_work'
+                      ? 'bg-emerald-600 border-emerald-500 text-white font-bold shadow-sm'
+                      : isDarkMode
+                      ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-750'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg ${activeTab === 'done_work' ? 'bg-white/20' : 'bg-emerald-500/15 text-emerald-500'}`}>
+                    <CheckCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight">Done Work</div>
+                    <div className="text-[10px] opacity-75">History & logs</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('requests');
-                  setIsMoreOpen(false);
-                }}
-                className={`relative flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                  activeTab === 'requests'
-                    ? 'bg-rose-600 border-rose-500 text-white font-bold shadow-2xs'
-                    : isDarkMode
-                    ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                {pendingRequestsCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 bg-[#39B54A] text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full">
-                    {pendingRequestsCount}
-                  </span>
-                )}
-                <FileText className={`w-4 h-4 mb-1 ${activeTab === 'requests' ? 'text-white' : 'text-rose-500'}`} />
-                <span className="text-[11px] font-bold">Requests</span>
-              </button>
+                {/* Requests */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('requests');
+                    setIsMoreOpen(false);
+                  }}
+                  className={`relative flex items-center space-x-3 p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[50px] ${
+                    activeTab === 'requests'
+                      ? 'bg-rose-600 border-rose-500 text-white font-bold shadow-sm'
+                      : isDarkMode
+                      ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-750'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg ${activeTab === 'requests' ? 'bg-white/20' : 'bg-rose-500/15 text-rose-500'}`}>
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight flex items-center gap-1.5">
+                      Requests
+                      {pendingRequestsCount > 0 && (
+                        <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                          {pendingRequestsCount}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] opacity-75">Approvals & parts</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('projects');
-                  setIsMoreOpen(false);
-                }}
-                className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                  activeTab === 'projects'
-                    ? 'bg-purple-600 border-purple-500 text-white font-bold shadow-2xs'
-                    : isDarkMode
-                    ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <FolderGit2 className={`w-4 h-4 mb-1 ${activeTab === 'projects' ? 'text-white' : 'text-purple-500'}`} />
-                <span className="text-[11px] font-bold">Projects</span>
-              </button>
+                {/* Projects */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('projects');
+                    setIsMoreOpen(false);
+                  }}
+                  className={`flex items-center space-x-3 p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[50px] ${
+                    activeTab === 'projects'
+                      ? 'bg-purple-600 border-purple-500 text-white font-bold shadow-sm'
+                      : isDarkMode
+                      ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-750'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg ${activeTab === 'projects' ? 'bg-white/20' : 'bg-purple-500/15 text-purple-500'}`}>
+                    <FolderGit2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight">Projects</div>
+                    <div className="text-[10px] opacity-75">Contracts & tenders</div>
+                  </div>
+                </button>
+              </div>
             </div>
 
-            {/* Cloud & Export Actions - Admin Only */}
-            {isAdmin && (
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Spreadsheet & Reports
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  <a
-                    href={currentSpreadsheetUrl || DEFAULT_SPREADSHEET_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center space-x-1.5 p-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-lg text-emerald-700 dark:text-emerald-300 text-xs font-semibold transition-colors"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <span className="truncate">Google Sheet</span>
-                  </a>
-                </div>
+            {/* Cloud & Export Actions */}
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Cloud Sync & Google Drive
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <a
+                  href={SHARQ_GOOGLE_DRIVE_FOLDER_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center space-x-2 p-3 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded-xl text-blue-700 dark:text-blue-300 text-xs font-bold transition-colors min-h-[48px]"
+                >
+                  <ExternalLink className="w-4 h-4 text-blue-500 shrink-0" />
+                  <span>Sharq Drive</span>
+                </a>
 
-                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                <a
+                  href={currentSpreadsheetUrl || DEFAULT_SPREADSHEET_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center space-x-2 p-3 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-bold transition-colors min-h-[48px]"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>Google Sheet</span>
+                </a>
+              </div>
+
+              {isAdmin && (
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
                   <button
                     type="button"
                     onClick={() => {
                       exportToExcel();
                       setIsMoreOpen(false);
                     }}
-                    className="flex items-center justify-center space-x-1.5 p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-2xs cursor-pointer"
+                    className="flex items-center justify-center space-x-2 p-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer min-h-[48px]"
                   >
-                    <Download className="w-3.5 h-3.5" />
+                    <Download className="w-4 h-4" />
                     <span>Export Excel</span>
                   </button>
 
@@ -233,135 +282,155 @@ export const MobileNavBar: React.FC = () => {
                         connectGoogle();
                         setIsMoreOpen(false);
                       }}
-                      className="flex items-center justify-center space-x-1.5 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-2xs cursor-pointer"
+                      className="flex items-center justify-center space-x-2 p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer min-h-[48px]"
                     >
-                      <Cloud className="w-3.5 h-3.5" />
+                      <Cloud className="w-4 h-4" />
                       <span>Connect Google</span>
                     </button>
                   ) : (
-                    <div className="flex items-center justify-center space-x-1.5 p-2 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg text-xs font-semibold">
-                      <Cloud className="w-3.5 h-3.5 text-[#39B54A]" />
+                    <div className="flex items-center justify-center space-x-2 p-3 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-xl text-xs font-bold min-h-[48px]">
+                      <Cloud className="w-4 h-4 text-[#39B54A]" />
                       <span>Drive Synced</span>
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Persistent Bottom Bar for Mobile Devices - Compact & Colorful */}
+      {/* Persistent Bottom Bar for Mobile Devices - Ergonomic, 52px+ Touch Targets */}
       <div
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 backdrop-blur-md border-t px-1.5 py-1 flex items-center justify-around safe-area-pb transition-colors duration-200 ${
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 backdrop-blur-lg border-t px-2 py-1.5 flex items-center justify-around pb-[max(0.5rem,env(safe-area-inset-bottom))] transition-colors duration-200 ${
           isDarkMode
-            ? 'bg-slate-950/95 border-slate-850 shadow-md'
-            : 'bg-white/95 border-slate-200 shadow-lg'
+            ? 'bg-slate-950/95 border-slate-800 shadow-2xl'
+            : 'bg-white/95 border-slate-200 shadow-xl'
         }`}
       >
-        {/* Dashboard */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col items-center justify-center min-w-[50px] py-1 px-1.5 rounded-lg transition-all cursor-pointer ${
-            activeTab === 'dashboard'
-              ? 'bg-[#F26522] text-white shadow-2xs font-bold'
-              : isDarkMode
-              ? 'text-slate-400 hover:text-slate-200'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <LayoutDashboard className={`w-4 h-4 ${activeTab === 'dashboard' ? 'text-white' : 'text-[#F26522]'}`} />
-          <span className="text-[9px] mt-0.5 font-bold tracking-tight">Home</span>
-        </button>
-
-        {/* New Case (Filled Green) */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('new_case')}
-          className={`relative flex flex-col items-center justify-center min-w-[50px] py-1 px-1.5 rounded-lg transition-all cursor-pointer ${
-            activeTab === 'new_case'
-              ? 'bg-[#39B54A] text-white shadow-2xs font-bold'
-              : isDarkMode
-              ? 'text-slate-400 hover:text-slate-200'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <div className="relative">
-            <PlusCircle className={`w-4 h-4 ${activeTab === 'new_case' ? 'text-white' : 'text-[#39B54A]'}`} />
-            {newCasesCount > 0 && (
-              <span className={`absolute -top-1 -right-1.5 text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center ${
-                activeTab === 'new_case' ? 'bg-white text-[#39B54A]' : 'bg-[#39B54A] text-white'
-              }`}>
-                {newCasesCount}
-              </span>
-            )}
-          </div>
-          <span className="text-[9px] mt-0.5 font-bold tracking-tight">New Case</span>
-        </button>
-
-        {/* My Desk (Filled Teal) */}
+        {/* 1. My Desk (Primary field view for engineers) */}
         <button
           type="button"
           onClick={() => setActiveTab('my_desk')}
-          className={`relative flex flex-col items-center justify-center min-w-[50px] py-1 px-1.5 rounded-lg transition-all cursor-pointer ${
+          className={`relative flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all cursor-pointer ${
             activeTab === 'my_desk'
-              ? 'bg-teal-600 text-white shadow-2xs font-bold'
+              ? 'bg-teal-600 text-white shadow-sm font-bold'
               : isDarkMode
-              ? 'text-slate-400 hover:text-slate-200'
-              : 'text-slate-600 hover:text-slate-900'
+              ? 'text-slate-400 hover:text-slate-200 active:bg-slate-900'
+              : 'text-slate-600 hover:text-slate-900 active:bg-slate-100'
           }`}
+          aria-label="My Desk"
         >
           <div className="relative">
-            <Laptop2 className={`w-4 h-4 ${activeTab === 'my_desk' ? 'text-white' : 'text-teal-600'}`} />
+            <Laptop2 className={`w-5 h-5 ${activeTab === 'my_desk' ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} />
             {inProgressCount > 0 && (
-              <span className={`absolute -top-1 -right-1.5 text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center ${
-                activeTab === 'my_desk' ? 'bg-white text-teal-700' : 'bg-[#F26522] text-white'
-              }`}>
+              <span
+                className={`absolute -top-1.5 -right-2 text-[9px] font-black rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shadow-xs ${
+                  activeTab === 'my_desk' ? 'bg-white text-teal-800' : 'bg-[#F26522] text-white'
+                }`}
+              >
                 {inProgressCount}
               </span>
             )}
           </div>
-          <span className="text-[9px] mt-0.5 font-bold tracking-tight">My Desk</span>
+          <span className="text-[10px] mt-1 font-bold tracking-tight">My Desk</span>
         </button>
 
-        {/* Asset Details (Filled Indigo) */}
+        {/* 2. New Case (Quick ticket create) */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('new_case')}
+          className={`relative flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'new_case'
+              ? 'bg-[#39B54A] text-white shadow-sm font-bold'
+              : isDarkMode
+              ? 'text-slate-400 hover:text-slate-200 active:bg-slate-900'
+              : 'text-slate-600 hover:text-slate-900 active:bg-slate-100'
+          }`}
+          aria-label="New Case"
+        >
+          <div className="relative">
+            <PlusCircle className={`w-5 h-5 ${activeTab === 'new_case' ? 'text-white' : 'text-[#39B54A]'}`} />
+            {newCasesCount > 0 && (
+              <span
+                className={`absolute -top-1.5 -right-2 text-[9px] font-black rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shadow-xs ${
+                  activeTab === 'new_case' ? 'bg-white text-[#39B54A]' : 'bg-[#39B54A] text-white'
+                }`}
+              >
+                {newCasesCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] mt-1 font-bold tracking-tight">New Case</span>
+        </button>
+
+        {/* 3. PPM Due (Critical preventive maintenance tracker) */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('ppm')}
+          className={`relative flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'ppm'
+              ? 'bg-amber-600 text-white shadow-sm font-bold'
+              : isDarkMode
+              ? 'text-slate-400 hover:text-slate-200 active:bg-slate-900'
+              : 'text-slate-600 hover:text-slate-900 active:bg-slate-100'
+          }`}
+          aria-label="PPM Due"
+        >
+          <div className="relative">
+            <CalendarCheck className={`w-5 h-5 ${activeTab === 'ppm' ? 'text-white' : 'text-amber-500'}`} />
+            {ppmDueCount > 0 && (
+              <span
+                className={`absolute -top-1.5 -right-2 text-[9px] font-black rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shadow-xs ${
+                  activeTab === 'ppm' ? 'bg-white text-amber-800' : 'bg-amber-500 text-white'
+                }`}
+              >
+                {ppmDueCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] mt-1 font-bold tracking-tight">PPM Due</span>
+        </button>
+
+        {/* 4. Assets Directory */}
         <button
           type="button"
           onClick={() => setActiveTab('add_asset')}
-          className={`flex flex-col items-center justify-center min-w-[50px] py-1 px-1.5 rounded-lg transition-all cursor-pointer ${
+          className={`flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all cursor-pointer ${
             activeTab === 'add_asset'
-              ? 'bg-indigo-600 text-white shadow-2xs font-bold'
+              ? 'bg-indigo-600 text-white shadow-sm font-bold'
               : isDarkMode
-              ? 'text-slate-400 hover:text-slate-200'
-              : 'text-slate-600 hover:text-slate-900'
+              ? 'text-slate-400 hover:text-slate-200 active:bg-slate-900'
+              : 'text-slate-600 hover:text-slate-900 active:bg-slate-100'
           }`}
+          aria-label="Assets"
         >
-          <HardDriveUpload className={`w-4 h-4 ${activeTab === 'add_asset' ? 'text-white' : 'text-indigo-500'}`} />
-          <span className="text-[9px] mt-0.5 font-bold tracking-tight whitespace-nowrap">Assets</span>
+          <HardDriveUpload className={`w-5 h-5 ${activeTab === 'add_asset' ? 'text-white' : 'text-indigo-500'}`} />
+          <span className="text-[10px] mt-1 font-bold tracking-tight whitespace-nowrap">Assets</span>
         </button>
 
-        {/* More */}
+        {/* 5. More (Modules, Drive, Sheets) */}
         <button
           type="button"
           onClick={() => setIsMoreOpen(!isMoreOpen)}
-          className={`relative flex flex-col items-center justify-center min-w-[50px] py-1 px-1.5 rounded-lg transition-all cursor-pointer ${
+          className={`relative flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all cursor-pointer ${
             isMoreTabActive || isMoreOpen
-              ? 'bg-slate-800 text-white shadow-2xs font-bold'
+              ? 'bg-slate-800 text-white shadow-sm font-bold'
               : isDarkMode
-              ? 'text-slate-400 hover:text-slate-200'
-              : 'text-slate-600 hover:text-slate-900'
+              ? 'text-slate-400 hover:text-slate-200 active:bg-slate-900'
+              : 'text-slate-600 hover:text-slate-900 active:bg-slate-100'
           }`}
+          aria-label="More Options"
         >
           <div className="relative">
-            <MoreHorizontal className={`w-4 h-4 ${isMoreTabActive || isMoreOpen ? 'text-white' : 'text-slate-500'}`} />
+            <MoreHorizontal className={`w-5 h-5 ${isMoreTabActive || isMoreOpen ? 'text-white' : 'text-slate-500'}`} />
             {pendingRequestsCount > 0 && (
-              <span className="absolute -top-1 -right-1.5 bg-[#39B54A] text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">
+              <span className="absolute -top-1.5 -right-2 bg-rose-500 text-white text-[9px] font-black rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shadow-xs">
                 {pendingRequestsCount}
               </span>
             )}
           </div>
-          <span className="text-[9px] mt-0.5 font-bold tracking-tight">More</span>
+          <span className="text-[10px] mt-1 font-bold tracking-tight">More</span>
         </button>
       </div>
     </>

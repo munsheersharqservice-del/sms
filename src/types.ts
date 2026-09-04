@@ -30,6 +30,32 @@ export type UserRole = 'Service Engineer' | 'Service Manager' | 'Admin';
 
 export type CustomerSector = 'Government' | 'Private';
 
+/**
+ * Automatically determine if a customer belongs to the Government sector.
+ * Requirement: If customer mentions HMC, PHCC, or HMDAC, it must always save as Government.
+ */
+export function isGovernmentCustomer(customerName?: string): boolean {
+  if (!customerName) return false;
+  const upper = customerName.toUpperCase();
+  return (
+    upper.includes('HMC') ||
+    upper.includes('PHCC') ||
+    upper.includes('HMDAC') ||
+    upper.includes('HAMAD') ||
+    upper.includes('PRIMARY HEALTH')
+  );
+}
+
+export function resolveCustomerSector(
+  customerName?: string,
+  explicitSector?: CustomerSector
+): CustomerSector {
+  if (isGovernmentCustomer(customerName)) {
+    return 'Government';
+  }
+  return explicitSector === 'Government' ? 'Government' : (explicitSector || 'Private');
+}
+
 export type CustomerFeedbackRating = 'Extremely Satisfied' | 'Satisfied' | 'Dissatisfied' | 'Annoyed';
 
 export type ServiceAfterStatus = 'Complete' | 'Pending for Spares' | 'Incomplete' | 'Under Observation';
@@ -102,6 +128,7 @@ export interface Asset {
   ppmType?: PpmType; // Yearly Maintenance, Routine Checkup
   lastPpmDate?: string;
   nextPpmDate?: string;
+  lastPpmReportLink?: string;
   invoiceNo?: string;
   installationReportNumber?: string;
   installationReportLink?: string;

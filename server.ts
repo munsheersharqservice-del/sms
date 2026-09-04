@@ -723,6 +723,18 @@ service@sharqmedicalsupply.qa`;
         else if (rawStatus.toLowerCase() === 'pending') status = 'Pending';
         else if (rawStatus.toLowerCase() === 'running' || rawStatus.toLowerCase() === 'in progress') status = 'Running';
 
+        const rawDept = (r[7] || 'Dental').trim();
+        const cleanDept = (rawDept.startsWith('http') || rawDept.includes('drive.google.com') || rawDept.includes('1TEQ')) ? 'Dental' : rawDept;
+
+        const rawCall = (r[8] || 'Service').trim();
+        const cleanCall = (rawCall.startsWith('http') || rawCall.includes('drive.google.com') || rawCall.includes('1TEQ')) ? 'Service' : rawCall;
+
+        const rawLink = (r[16] || '').trim();
+        const cleanLink = (rawLink.includes('1TEQ') || rawLink.includes('folders/')) ? '' : rawLink;
+
+        const rawAtt = (r[10] || '').trim();
+        const cleanAtt = (rawAtt.includes('1TEQ') || rawAtt.includes('folders/')) ? '' : rawAtt;
+
         return {
           id: `cs-${ticket}`,
           ticketNumber: ticket,
@@ -735,17 +747,17 @@ service@sharqmedicalsupply.qa`;
           issueDescription: r[5] || 'Equipment inspection & service',
           serialNumber: (r[6] || '').toUpperCase().trim(),
           model: 'Medical Equipment',
-          department: (r[7] || 'Dental').trim(),
-          callType: (r[8] || 'Service').trim(),
-          workClassification: (r[8] || 'Repair').trim(),
+          department: cleanDept,
+          callType: cleanCall,
+          workClassification: cleanCall,
           warrantyStatus: (r[9] || 'Warranty').trim(),
-          attachmentUrl: r[10] || '',
+          attachmentUrl: cleanAtt,
           pendingReason: r[11] || '',
           invoiceRequired: r[12] === 'Yes' ? 'Yes' : 'No',
           invoiceNumber: r[13] || '',
           remarks: r[14] || '',
           serviceReportNumber: r[15] || '',
-          serviceReportDriveLink: r[16] || '',
+          serviceReportDriveLink: cleanLink,
           invoiceFileUrl: r[17] || '',
           closeDate: r[18] || '',
           priority: 'Normal',
@@ -778,6 +790,24 @@ service@sharqmedicalsupply.qa`;
           status: 'Done',
         }));
 
+      // Helper to classify government accounts (HMC, PHCC, HMDAC)
+      const isGovernmentCustomer = (name?: string): boolean => {
+        if (!name) return false;
+        const upper = name.toUpperCase();
+        return (
+          upper.includes('HMC') ||
+          upper.includes('PHCC') ||
+          upper.includes('HMDAC') ||
+          upper.includes('HAMAD') ||
+          upper.includes('PRIMARY HEALTH')
+        );
+      };
+
+      const resolveCustomerSector = (name?: string, explicit?: string): 'Government' | 'Private' => {
+        if (isGovernmentCustomer(name)) return 'Government';
+        return explicit?.toLowerCase().includes('gov') ? 'Government' : 'Private';
+      };
+
       // 3. Process Equipment / Assets
       const assets = eqRows
         .filter((r) => r[0] && r[0].trim() && !r[0].toLowerCase().includes('serial number') && !r[0].toLowerCase().includes('serial #') && !r[0].toLowerCase().includes('serial'))
@@ -788,12 +818,13 @@ service@sharqmedicalsupply.qa`;
           const rawLastPpm = r[9] || '';
           const rawNextPpm = r[10] || '';
           const rawRoom = r[11] || '';
-          const rawSector = r[12] && (r[12].toLowerCase().includes('gov') || r[12].toLowerCase().includes('priv')) ? (r[12].toLowerCase().includes('gov') ? 'Government' : 'Private') : 'Private';
+          const custName = (r[1] || '').toUpperCase().trim();
+          const finalSector = resolveCustomerSector(custName, r[12]);
 
           return {
             id: `ast-${i + 1}`,
             serialNumber: r[0].toUpperCase().trim(),
-            customerName: (r[1] || '').toUpperCase().trim(),
+            customerName: custName,
             customerLocation: 'Doha, Qatar',
             manufacturer: (r[2] || '').toUpperCase().trim(),
             model: (r[3] || '').toUpperCase().trim(),
@@ -806,7 +837,7 @@ service@sharqmedicalsupply.qa`;
             lastPpmDate: rawLastPpm,
             nextPpmDueDate: rawNextPpm,
             roomWard: rawRoom,
-            sector: rawSector,
+            sector: finalSector,
             poNumber: r[13] || r[8] || '',
             accessories: [],
             installationReportLink: (r[15] && !r[15].includes('folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9')) ? r[15].trim() : '',
@@ -825,7 +856,7 @@ service@sharqmedicalsupply.qa`;
             id: `cust-${i + 1}`,
             name,
             location: r[3] || r[1] || 'Doha, Qatar',
-            sector: r[2]?.toLowerCase() === 'government' ? 'Government' : 'Private',
+            sector: resolveCustomerSector(name, r[2]),
             department: r[7] || r[3] || 'Medical',
             contactPerson: r[4] || 'Biomedical Engineering Unit',
             phone: r[5] || '+974 4400 0000',
@@ -974,12 +1005,28 @@ service@sharqmedicalsupply.qa`;
       const finalDoneWorkLogs: any[] = [];
       const seenDoneKeys = new Set<string>();
 
+      const sanitizeDw = (item: any) => {
+        const rawDept = String(item.department || 'Dental').trim();
+        const cleanDept = (rawDept.startsWith('http') || rawDept.includes('drive.google.com') || rawDept.includes('1TEQ')) ? 'Dental' : rawDept;
+        const rawCall = String(item.callType || item.workClassification || 'Service').trim();
+        const cleanCall = (rawCall.startsWith('http') || rawCall.includes('drive.google.com') || rawCall.includes('1TEQ')) ? 'Service' : rawCall;
+        const rawLink = String(item.serviceReportDriveLink || '').trim();
+        const cleanLink = (rawLink.includes('1TEQ') || rawLink.includes('folders/')) ? '' : rawLink;
+        return {
+          ...item,
+          department: cleanDept,
+          callType: cleanCall,
+          workClassification: cleanCall,
+          serviceReportDriveLink: cleanLink,
+        };
+      };
+
       // 1. Explicit staged DoneWork logs take highest priority
       for (const dw of stagedDoneWork) {
         const key = (dw.ticketNumber || dw.caseNumber || dw.serviceReportNumber || dw.id || '').toString().trim().toUpperCase();
         if (key && !seenDoneKeys.has(key)) {
           seenDoneKeys.add(key);
-          finalDoneWorkLogs.push(dw);
+          finalDoneWorkLogs.push(sanitizeDw(dw));
         }
       }
 
@@ -990,7 +1037,7 @@ service@sharqmedicalsupply.qa`;
           const key = (c.ticketNumber || c.caseNumber || c.serviceReportNumber || c.id || '').toString().trim().toUpperCase();
           if (key && !seenDoneKeys.has(key)) {
             seenDoneKeys.add(key);
-            finalDoneWorkLogs.push({
+            finalDoneWorkLogs.push(sanitizeDw({
               id: `dw-${c.ticketNumber || c.id || Date.now()}`,
               caseId: c.id,
               ticketNumber: c.ticketNumber,
@@ -1018,7 +1065,7 @@ service@sharqmedicalsupply.qa`;
               customerSignatoryName: c.customerSignatoryName || `${c.customerName} Representative`,
               customerSignature: c.customerSignature || 'Signed Electronically',
               status: 'Done',
-            });
+            }));
           }
         }
       }
@@ -1028,15 +1075,52 @@ service@sharqmedicalsupply.qa`;
         const key = (dw.ticketNumber || dw.caseNumber || dw.serviceReportNumber || dw.id || '').toString().trim().toUpperCase();
         if (key && !seenDoneKeys.has(key)) {
           seenDoneKeys.add(key);
-          finalDoneWorkLogs.push(dw);
+          finalDoneWorkLogs.push(sanitizeDw(dw));
         }
       }
+
+      // 4. Guarantee consistency: any case present in finalDoneWorkLogs MUST have status: 'Done' in cases!
+      // And cases must be deduplicated by ticketNumber so the same ticket cannot appear as both 'New' and 'Done'.
+      const allDoneTickets = new Set(
+        finalDoneWorkLogs.map((dw) => (dw.ticketNumber || dw.caseNumber || '').trim().toUpperCase()).filter(Boolean)
+      );
+
+      const uniqueCasesMap = new Map<string, any>();
+      for (const c of cases) {
+        const tKey = (c.ticketNumber || c.caseNumber || c.id || '').trim().toUpperCase();
+        if (!tKey) continue;
+
+        const isDone = c.status === 'Done' || allDoneTickets.has(tKey) || (c.serviceReportNumber && c.serviceReportNumber.trim().toUpperCase().startsWith('SR-'));
+        const resolvedStatus = isDone ? 'Done' : (c.status || 'New');
+
+        const currentCase = {
+          ...c,
+          status: resolvedStatus,
+        };
+
+        if (!uniqueCasesMap.has(tKey)) {
+          uniqueCasesMap.set(tKey, currentCase);
+        } else {
+          const prev = uniqueCasesMap.get(tKey);
+          uniqueCasesMap.set(tKey, {
+            ...prev,
+            ...currentCase,
+            status: (prev.status === 'Done' || currentCase.status === 'Done') ? 'Done' : (currentCase.status || prev.status),
+            serviceReportNumber: currentCase.serviceReportNumber || prev.serviceReportNumber || '',
+            serviceReportDriveLink: currentCase.serviceReportDriveLink || prev.serviceReportDriveLink || '',
+            closeDate: currentCase.closeDate || prev.closeDate || '',
+            remarks: currentCase.remarks || prev.remarks || '',
+          });
+        }
+      }
+
+      const synchronizedCases = Array.from(uniqueCasesMap.values());
 
       return res.json({
         success: true,
         spreadsheetId: sheetId,
         counts: {
-          cases: cases.length,
+          cases: synchronizedCases.length,
           doneWorkLogs: finalDoneWorkLogs.length,
           assets: assets.length,
           customers: customers.length,
@@ -1046,7 +1130,7 @@ service@sharqmedicalsupply.qa`;
           softwareLicenses: softwareLicenses.length,
         },
         data: {
-          cases,
+          cases: synchronizedCases,
           doneWorkLogs: finalDoneWorkLogs,
           assets,
           customers,

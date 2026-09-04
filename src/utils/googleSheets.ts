@@ -1,4 +1,4 @@
-import { Asset, ServiceCase, DoneWorkLog, RequestItem, ServiceProject, SoftwareLicense, Customer, SparePartItem, User, ManufacturerModel, Department } from '../types';
+import { Asset, ServiceCase, DoneWorkLog, RequestItem, ServiceProject, SoftwareLicense, Customer, SparePartItem, User, ManufacturerModel, Department, resolveCustomerSector } from '../types';
 import { handleAuthExpired } from './firebaseAuth';
 
 export const DEFAULT_SPREADSHEET_ID = '1q20EnJj-uyT-iGOS-h3kCkAXP7HAiADDtIeNdOsIT9A';
@@ -1442,12 +1442,19 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
     else if (rawStatus.toLowerCase() === 'pending') status = 'Pending';
     else if (rawStatus.toLowerCase() === 'running' || rawStatus.toLowerCase() === 'in progress') status = 'Running';
 
+    const repNum = (r[14] || '').trim();
+    if (repNum && repNum.toUpperCase().startsWith('SR-')) {
+      status = 'Done';
+    }
+
+    const custName = (r[2] || 'HOSPITAL / CLINIC').toUpperCase().trim();
+
     return {
       id: uniqueId,
       ticketNumber: ticket,
       caseNumber: ticket,
       createdAt: r[1] || new Date().toISOString(),
-      customerName: (r[2] || 'HOSPITAL / CLINIC').toUpperCase().trim(),
+      customerName: custName,
       assignedEngineerName: (r[3] || 'ENGINEER').toUpperCase().trim(),
       assignedEngineerId: `eng-${(r[3] || 'engineer').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
       status,
@@ -1460,24 +1467,48 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
       pendingReason: (r[11] || undefined) as any,
       invoiceRequired: r[12] === 'Yes' ? 'Yes' : 'No',
       invoiceNumber: r[13] || '',
-      serviceReportNumber: r[14] || '',
-      sector: (r[15] || 'Private').trim() as any,
+      serviceReportNumber: repNum,
+      sector: resolveCustomerSector(custName, (r[15] || 'Private').trim() as any),
       callType: (r[16] || 'Service').trim() as any,
       workClassification: (r[16] || 'Repair').trim() as any,
       scheduledDate: r[17] || '',
       remarks: r[18] || '',
       serviceReportDriveLink: r[10] || '',
       invoiceFileUrl: '',
-      closeDate: status === 'Done' ? (r[1] || '2026-08-10') : '',
+      closeDate: status === 'Done' ? (r[18] || r[1] || new Date().toISOString().split('T')[0]) : '',
       priority: 'Normal' as any,
       updatedAt: r[18] || r[1] || new Date().toISOString(),
     };
   });
 
+  // Deduplicate cases by ticketNumber
+  const uniqueCasesMap = new Map<string, any>();
+  for (const c of cases) {
+    const tKey = (c.ticketNumber || c.caseNumber || c.id || '').trim().toUpperCase();
+    if (!tKey) continue;
+    if (!uniqueCasesMap.has(tKey)) {
+      uniqueCasesMap.set(tKey, c);
+    } else {
+      const prev = uniqueCasesMap.get(tKey);
+      uniqueCasesMap.set(tKey, {
+        ...prev,
+        ...c,
+        status: (prev.status === 'Done' || c.status === 'Done') ? 'Done' : (c.status || prev.status),
+        serviceReportNumber: c.serviceReportNumber || prev.serviceReportNumber || '',
+        serviceReportDriveLink: c.serviceReportDriveLink || prev.serviceReportDriveLink || '',
+        closeDate: c.closeDate || prev.closeDate || '',
+        remarks: c.remarks || prev.remarks || '',
+      });
+    }
+  }
+  const dedupedCases = Array.from(uniqueCasesMap.values());
+
   const seenDwIds = new Set<string>();
-  const doneWorkLogs = cases
-    .filter((c) => c.status === 'Done' || c.serviceReportNumber || c.closeDate)
+  const doneWorkLogs = dedupedCases
+    .filter((c) => c.status === 'Done' || (c.serviceReportNumber && c.serviceReportNumber.toUpperCase().startsWith('SR-')))
     .map((c, i) => {
+      // Ensure status is marked Done
+      c.status = 'Done';
       let uniqueDwId = `dw-${c.ticketNumber}-${i + 1}`;
       if (seenDwIds.has(uniqueDwId)) {
         uniqueDwId = `dw-${c.ticketNumber}-${i + 1}-${Date.now()}`;
@@ -1550,7 +1581,7 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
         lastPpmDate: lastPpm,
         nextPpmDueDate: nextPpm,
         roomWard,
-        sector,
+        sector: resolveCustomerSector(custName, sector),
         poNumber: poNum,
         status,
         installationReportLink: reportLink,
@@ -1576,7 +1607,7 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
         id: uniqueCustId,
         name: name,
         location: r[3] || r[1] || 'Doha, Qatar',
-        sector: (r[2]?.toLowerCase() === 'government' ? 'Government' : 'Private') as any,
+        sector: resolveCustomerSector(name, (r[2]?.toLowerCase() === 'government' ? 'Government' : 'Private') as any),
         department: (r[7] || r[3] || 'Medical') as any,
         contactPerson: r[4] || 'Biomedical Engineering Unit',
         phone: r[5] || '+974 4400 0000',
@@ -1761,7 +1792,7 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
     });
 
   return {
-    cases,
+    cases: dedupedCases,
     doneWorkLogs,
     assets,
     customers,

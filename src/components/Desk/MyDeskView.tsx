@@ -51,6 +51,13 @@ import { CaseAttachmentList } from '../Common/CaseAttachmentList';
 import { SharqDigitalReportModal } from '../Common/SharqDigitalReportModal';
 
 export const MyDeskView: React.FC = () => {
+  const displayCleanText = (val: any, fallback: string = ''): string => {
+    if (val === null || val === undefined) return fallback;
+    const s = String(val).trim();
+    if (s.startsWith('http') || s.includes('drive.google.com') || s.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || s.includes('folders/')) return fallback;
+    return s;
+  };
+
   const {
     currentUser,
     users,
@@ -94,9 +101,7 @@ export const MyDeskView: React.FC = () => {
   const [manualReportNumber, setManualReportNumber] = useState('');
   const [manualUploadedFile, setManualUploadedFile] = useState<{ name: string; size: number; type: string } | null>(null);
   const [manualUploadedItem, setManualUploadedItem] = useState<AttachmentItem | null>(null);
-  const [manualDriveFolderLink, setManualDriveFolderLink] = useState(
-    SHARQ_GOOGLE_DRIVE_FOLDER_URL
-  );
+  const [manualDriveFolderLink, setManualDriveFolderLink] = useState('');
 
   // Digital Report State
   const [customerSignatoryName, setCustomerSignatoryName] = useState('');
@@ -245,9 +250,10 @@ export const MyDeskView: React.FC = () => {
     setManualReportNumber(repNum);
     setManualUploadedFile(null);
     setManualUploadedItem(null);
-    setManualDriveFolderLink(
-      serviceCase.serviceReportDriveLink || ''
-    );
+    const cleanDrive = (serviceCase.serviceReportDriveLink && !serviceCase.serviceReportDriveLink.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') && !serviceCase.serviceReportDriveLink.includes('folders/'))
+      ? serviceCase.serviceReportDriveLink
+      : '';
+    setManualDriveFolderLink(cleanDrive);
 
     setCustomerSignatoryName(serviceCase.customerSignatoryName || `${serviceCase.customerName} Representative`);
     setCustomerDesignation('Biomedical Department / Operations Supervisor');
@@ -259,7 +265,7 @@ export const MyDeskView: React.FC = () => {
     setAttachedDocItem(null);
     setIsUploadingFile(false);
 
-    // Keep empty so engineer will fill, quick presets available below
+    // Keep execution summary empty initially so engineer will fill it directly
     setExecutionSummary(serviceCase.remarks || '');
   };
 
@@ -331,6 +337,54 @@ export const MyDeskView: React.FC = () => {
     setUsedPartsList((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Instant 1-Click Case Close
+  const handleQuickCloseCase = (sc: ServiceCase) => {
+    const reportNum = sc.serviceReportNumber || `SR-2026-${sc.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`;
+    const serial = (sc.serialNumber && sc.serialNumber !== 'SN-UNKNOWN') ? sc.serialNumber : 'SN-EQUIPMENT';
+    const summary = sc.remarks || `Service maintenance, diagnostic verification and operational handover completed for ${sc.model || 'equipment'}.`;
+    const signatory = sc.customerSignatoryName || `${sc.customerName} Representative`;
+    const cleanDrive = (sc.serviceReportDriveLink && (sc.serviceReportDriveLink.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || sc.serviceReportDriveLink.includes('folders/'))) ? '' : (sc.serviceReportDriveLink || '');
+
+    const newDoneLog: DoneWorkLog = {
+      id: `dw-${Date.now()}`,
+      caseId: sc.id,
+      ticketNumber: sc.ticketNumber,
+      caseNumber: sc.ticketNumber,
+      customerName: sc.customerName,
+      serialNumber: serial,
+      model: sc.model || 'Medical Equipment',
+      department: displayCleanText(sc.department, 'Dental') as any,
+      callType: displayCleanText(sc.callType || sc.workClassification, 'Service') as any,
+      workClassification: displayCleanText(sc.callType || sc.workClassification, 'Service') as any,
+      engineerName: sc.assignedEngineerName || currentUser?.name || 'ENGINEER',
+      dateCompleted: new Date().toISOString().split('T')[0],
+      hoursSpent: 2.5,
+      workDoneSummary: summary,
+      serviceReportNumber: reportNum,
+      serviceReportDriveLink: cleanDrive,
+      attachments: (sc.attachments || []).filter((a) => !a?.driveLink?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9')),
+      customerSignatoryName: signatory,
+      customerSignature: sc.customerSignature || 'Signed Electronically',
+      status: 'Done',
+    };
+
+    addDoneWorkLog(newDoneLog);
+
+    updateCase(sc.id, {
+      status: 'Done',
+      remarks: summary,
+      serviceReportNumber: reportNum,
+      serviceReportMethod: 'Digital Report',
+      serviceReportDriveLink: cleanDrive,
+      customerSignatoryName: signatory,
+      customerSignature: sc.customerSignature || 'Signed Electronically',
+      closeDate: new Date().toISOString().split('T')[0],
+    });
+
+    setActionSuccessMsg(`Case #${sc.ticketNumber} successfully closed and marked DONE!`);
+    setTimeout(() => setActionSuccessMsg(null), 4000);
+  };
+
   const handleSaveStatusChange = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCaseForAction) return;
@@ -339,53 +393,66 @@ export const MyDeskView: React.FC = () => {
       updateCase(selectedCaseForAction.id, {
         status: 'Pending',
         pendingReason,
-        remarks: pendingNotes || executionSummary,
+        remarks: pendingNotes || executionSummary || 'Pending spare parts or customer verification',
         sparePartsUsed: usedPartsList,
         invoiceRequired: hasInvoice,
         invoiceNumber: hasInvoice === 'Yes' ? invoiceNumber : undefined,
       });
 
       setActionSuccessMsg(`Case #${selectedCaseForAction.ticketNumber} updated to PENDING.`);
-    } else if (targetStatus === 'Done') {
-      if (!executionSummary.trim()) {
-        alert('Execution Remarks / Summary is required to complete the case.');
-        return;
+      setSelectedCaseForAction(null);
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+      return;
+    }
+
+    if (targetStatus === 'Done') {
+      const finalSummary = (executionSummary || selectedCaseForAction.remarks || 'Service inspection, diagnostics and verification completed. Equipment tested, fully operational, and handed over.').trim();
+      const finalSerial = (manualSerialNumber || selectedCaseForAction.serialNumber || 'SN-EQUIPMENT').trim();
+      let finalReportNum = (manualReportNumber || selectedCaseForAction.serviceReportNumber || `SR-2026-${selectedCaseForAction.ticketNumber}`).trim();
+      let finalDriveLink = (manualDriveFolderLink || selectedCaseForAction.serviceReportDriveLink || '').trim();
+      if (finalDriveLink.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || finalDriveLink.includes('folders/')) {
+        finalDriveLink = '';
       }
 
-      let finalReportNum = manualReportNumber.trim();
-      let finalDriveLink = manualDriveFolderLink.trim();
       let finalAttachment = '';
       let docMethodName: 'Manual Upload' | 'Digital Report' | 'Attached Document' = 'Digital Report';
-      let caseAttachments: AttachmentItem[] = [...(selectedCaseForAction.attachments || [])];
+      let caseAttachments: AttachmentItem[] = [...(selectedCaseForAction.attachments || [])].filter(
+        (a) => !a?.driveLink?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9')
+      );
 
       if (docMethod === 'MANUAL_UPLOAD') {
         docMethodName = 'Manual Upload';
-        if (!manualSerialNumber.trim()) {
-          alert('Please enter Serial Number for the Manual Scanned Service Report.');
-          return;
-        }
-        finalReportNum = manualReportNumber.trim() || `SR-${manualSerialNumber.trim()}`;
-        finalDriveLink = manualUploadedItem?.driveLink || manualDriveFolderLink || '';
-        finalAttachment = manualUploadedItem?.name || (manualUploadedFile ? manualUploadedFile.name : `Scanned_Report_${manualSerialNumber.trim()}.pdf`);
+        finalReportNum = manualReportNumber.trim() || `SR-${finalSerial}`;
+        finalDriveLink = (manualUploadedItem?.driveLink || manualDriveFolderLink || '').trim();
+        if (finalDriveLink.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || finalDriveLink.includes('folders/')) finalDriveLink = '';
+        
+        // Scanned hardcopy report filename must match physical service report number exactly
+        const ext = (manualUploadedFile?.name || manualUploadedItem?.name || '').includes('.')
+          ? (manualUploadedFile?.name || manualUploadedItem?.name || '').substring((manualUploadedFile?.name || manualUploadedItem?.name || '').lastIndexOf('.'))
+          : '.pdf';
+        const expectedFileName = finalReportNum.toLowerCase().endsWith(ext.toLowerCase()) ? finalReportNum : `${finalReportNum}${ext}`;
+        finalAttachment = expectedFileName;
 
         if (manualUploadedItem) {
-          caseAttachments = [...caseAttachments.filter((a) => a.id !== manualUploadedItem.id), manualUploadedItem];
+          const syncedItem = { ...manualUploadedItem, name: expectedFileName };
+          caseAttachments = [...caseAttachments.filter((a) => a.id !== manualUploadedItem.id), syncedItem];
         }
       } else if (docMethod === 'DIGITAL_REPORT') {
         docMethodName = 'Digital Report';
         finalReportNum = manualReportNumber.trim() || `SR-2026-${selectedCaseForAction.ticketNumber}`;
-        finalDriveLink = selectedCaseForAction.serviceReportDriveLink || '';
         finalAttachment = `Digital_Report_${selectedCaseForAction.ticketNumber}.pdf`;
       } else if (docMethod === 'ATTACHED_DOC') {
         docMethodName = 'Attached Document';
         finalReportNum = docNumber.trim() || manualReportNumber.trim() || `DOC-${selectedCaseForAction.ticketNumber}`;
-        finalDriveLink = attachedDocItem?.driveLink || '';
+        finalDriveLink = (attachedDocItem?.driveLink || '').trim();
+        if (finalDriveLink.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || finalDriveLink.includes('folders/')) finalDriveLink = '';
         finalAttachment = attachedDocItem?.name || (attachedDocFile ? attachedDocFile.name : `${docType}_${docNumber.trim() || selectedCaseForAction.ticketNumber}.pdf`);
-
         if (attachedDocItem) {
           caseAttachments = [...caseAttachments.filter((a) => a.id !== attachedDocItem.id), attachedDocItem];
         }
       }
+
+      const finalSignatory = customerSignatoryName.trim() || `${selectedCaseForAction.customerName} Representative`;
 
       const newDoneLog: DoneWorkLog = {
         id: `dw-${Date.now()}`,
@@ -393,15 +460,15 @@ export const MyDeskView: React.FC = () => {
         ticketNumber: selectedCaseForAction.ticketNumber,
         caseNumber: selectedCaseForAction.ticketNumber,
         customerName: selectedCaseForAction.customerName,
-        serialNumber: selectedCaseForAction.serialNumber || manualSerialNumber || 'N/A',
+        serialNumber: finalSerial,
         model: selectedCaseForAction.model || 'Medical Device',
-        department: selectedCaseForAction.department,
-        callType: selectedCaseForAction.callType,
-        workClassification: selectedCaseForAction.callType,
+        department: displayCleanText(selectedCaseForAction.department, 'Dental') as any,
+        callType: displayCleanText(selectedCaseForAction.callType || selectedCaseForAction.workClassification, 'Service') as any,
+        workClassification: displayCleanText(selectedCaseForAction.callType || selectedCaseForAction.workClassification, 'Service') as any,
         engineerName: selectedCaseForAction.assignedEngineerName || currentUser?.name || 'ENGINEER',
         dateCompleted: new Date().toISOString().split('T')[0],
         hoursSpent: 2.5,
-        workDoneSummary: executionSummary.trim(),
+        workDoneSummary: finalSummary,
         serviceReportNumber: finalReportNum,
         serviceReportDriveLink: finalDriveLink,
         attachments: caseAttachments,
@@ -412,64 +479,50 @@ export const MyDeskView: React.FC = () => {
         })),
         invoiceRequired: hasInvoice,
         invoiceNumber: hasInvoice === 'Yes' ? invoiceNumber : (docType === 'Invoice' && docNumber ? docNumber : undefined),
-        customerSignatoryName: customerSignatoryName || `${selectedCaseForAction.customerName} Representative`,
+        customerSignatoryName: finalSignatory,
         customerSignature: signatureDataUrl || 'Signed Electronically',
         status: 'Done',
       };
 
-      // Log to Done Work Master Log
       addDoneWorkLog(newDoneLog);
 
-      // Only set for digital report download preview; manual upload strictly saves attachment without auto-generating PDF
       if (docMethod === 'DIGITAL_REPORT') {
         setLastDoneLog(newDoneLog);
       } else {
         setLastDoneLog(null);
       }
 
-      // Update Service Case
       updateCase(selectedCaseForAction.id, {
         status: 'Done',
-        remarks: executionSummary.trim(),
+        remarks: finalSummary,
         serviceReportNumber: finalReportNum,
         serviceReportMethod: docMethodName,
         serviceReportAttachment: finalAttachment,
         serviceReportDriveLink: finalDriveLink,
         attachments: caseAttachments,
-        customerSignatoryName: customerSignatoryName || undefined,
+        customerSignatoryName: finalSignatory,
         customerSignature: signatureDataUrl || 'Signed Electronically',
         documentAttachmentNumber: docNumber ? docNumber : undefined,
         sparePartsUsed: usedPartsList,
         invoiceRequired: hasInvoice,
         invoiceNumber: hasInvoice === 'Yes' ? invoiceNumber : undefined,
+        closeDate: new Date().toISOString().split('T')[0],
       });
 
-      if (docMethod === 'MANUAL_UPLOAD') {
-        setActionSuccessMsg(
-          `Case #${selectedCaseForAction.ticketNumber} marked DONE with Manual Scanned Report. Attached file saved to Google Drive!`
-        );
-      } else if (docMethod === 'ATTACHED_DOC') {
-        setActionSuccessMsg(
-          `Case #${selectedCaseForAction.ticketNumber} marked DONE with Attached Document (Saved to Google Drive).`
-        );
-      } else {
-        setActionSuccessMsg(
-          `Case #${selectedCaseForAction.ticketNumber} marked DONE & saved with Digital Report in Google Drive!`
-        );
-      }
-    } else {
-      // New or Running
-      updateCase(selectedCaseForAction.id, {
-        status: targetStatus,
-        remarks: executionSummary || selectedCaseForAction.remarks,
-      });
-      setActionSuccessMsg(`Case #${selectedCaseForAction.ticketNumber} set to ${targetStatus}.`);
+      setActionSuccessMsg(`Case #${selectedCaseForAction.ticketNumber} marked DONE & successfully saved!`);
+      setSelectedCaseForAction(null);
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+      return;
     }
 
-    setTimeout(() => {
-      setActionSuccessMsg(null);
-      setSelectedCaseForAction(null);
-    }, 1800);
+    // New or Running
+    updateCase(selectedCaseForAction.id, {
+      status: targetStatus,
+      remarks: executionSummary || selectedCaseForAction.remarks,
+    });
+    setActionSuccessMsg(`Case #${selectedCaseForAction.ticketNumber} set to ${targetStatus}.`);
+    setSelectedCaseForAction(null);
+    setTimeout(() => setActionSuccessMsg(null), 4000);
   };
 
   return (
@@ -482,7 +535,7 @@ export const MyDeskView: React.FC = () => {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
+              <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white uppercase">
                 ADMIN SERVICE DESK & CALL DISPATCH
               </h1>
               <span className="bg-teal-500 text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
@@ -671,7 +724,7 @@ export const MyDeskView: React.FC = () => {
                     </span>
 
                     <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded-md">
-                      {sc.callType}
+                      {displayCleanText(sc.callType, 'Service')}
                     </span>
 
                     <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded-md">
@@ -695,7 +748,7 @@ export const MyDeskView: React.FC = () => {
                     <div className="font-extrabold text-slate-900 dark:text-white text-xs uppercase">
                       {sc.customerName}
                     </div>
-                    <div className="text-[11px] text-slate-600 dark:text-slate-400">{sc.department} Department</div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400">{displayCleanText(sc.department, 'Dental')} Department</div>
                   </div>
 
                   {/* Equipment & Serial */}
@@ -779,11 +832,23 @@ export const MyDeskView: React.FC = () => {
                     {/* PRIMARY OPEN CASE & EXECUTE BUTTON */}
                     <button
                       type="button"
-                      onClick={() => openStatusModal(sc, sc.status === 'Done' ? 'Done' : 'Done')}
+                      onClick={() => openStatusModal(sc, 'Done')}
                       className="px-3 py-1 rounded-lg text-xs font-extrabold bg-teal-700 hover:bg-teal-800 text-white flex items-center space-x-1 shadow-2xs transition-colors cursor-pointer"
+                      title="Open full execution and service report dialog"
                     >
-                      <Wrench className="w-3 h-3" />
+                      <Wrench className="w-3.5 h-3.5" />
                       <span>EXECUTE CASE</span>
+                    </button>
+
+                    {/* 1-CLICK INSTANT CLOSE CASE BUTTON */}
+                    <button
+                      type="button"
+                      onClick={() => handleQuickCloseCase(sc)}
+                      className="px-3 py-1 rounded-lg text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center space-x-1 shadow-2xs transition-colors cursor-pointer"
+                      title="Instantly close and mark case DONE with one click"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>⚡ CLOSE CASE</span>
                     </button>
 
                     <span className="text-[10px] font-bold text-slate-400 uppercase mx-1">
@@ -1011,24 +1076,22 @@ export const MyDeskView: React.FC = () => {
                 )}
               </div>
 
-              {/* MANDATORY EXECUTION REMARKS / SUMMARY */}
+              {/* EXECUTION REMARKS / SUMMARY (OPTIONAL - ENGINEER WILL FILL) */}
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-900 uppercase flex items-center space-x-1">
                     <span>EXECUTION REMARKS / SUMMARY</span>
-                    <span className="text-red-500 font-extrabold">*</span>
                   </label>
                   <span className="text-[10px] font-semibold text-slate-500 uppercase">
-                    Mandatory for job completion & history
+                    (Engineer will fill)
                   </span>
                 </div>
 
                 <textarea
                   rows={3}
-                  required={targetStatus === 'Done'}
                   value={executionSummary}
                   onChange={(e) => setExecutionSummary(e.target.value)}
-                  placeholder="Enter detailed maintenance performed, findings, tests executed, calibrations, and final handover notes..."
+                  placeholder="Engineer will fill execution remarks, maintenance performed, findings, tests executed..."
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-white font-semibold text-black placeholder:text-slate-400"
                 />
 
@@ -1208,7 +1271,6 @@ export const MyDeskView: React.FC = () => {
                           </label>
                           <input
                             type="text"
-                            required
                             list="manual-asset-serials"
                             value={manualSerialNumber}
                             onChange={(e) => {
@@ -1240,13 +1302,23 @@ export const MyDeskView: React.FC = () => {
                         {/* Service Report Number */}
                         <div>
                           <label className="block text-xs font-bold text-slate-800 uppercase mb-1">
-                            PHYSICAL SERVICE REPORT # <span className="text-red-500">*</span>
+                            PHYSICAL SERVICE REPORT #
                           </label>
                           <input
                             type="text"
-                            required
                             value={manualReportNumber}
-                            onChange={(e) => setManualReportNumber(e.target.value.toUpperCase())}
+                            onChange={(e) => {
+                              const val = e.target.value.toUpperCase();
+                              setManualReportNumber(val);
+                              if (manualUploadedItem) {
+                                const ext = manualUploadedItem.name.includes('.') ? manualUploadedItem.name.substring(manualUploadedItem.name.lastIndexOf('.')) : '.pdf';
+                                const updatedName = val.trim() ? (val.trim().toLowerCase().endsWith(ext.toLowerCase()) ? val.trim() : `${val.trim()}${ext}`) : manualUploadedItem.name;
+                                setManualUploadedItem({ ...manualUploadedItem, name: updatedName });
+                                if (manualUploadedFile) {
+                                  setManualUploadedFile({ ...manualUploadedFile, name: updatedName });
+                                }
+                              }
+                            }}
                             placeholder="e.g. SR-2026-8819"
                             className="w-full px-3 py-2 text-xs border border-emerald-300 rounded-lg font-mono font-bold uppercase bg-white text-black focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-400"
                           />
@@ -1266,8 +1338,15 @@ export const MyDeskView: React.FC = () => {
                             onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (file && selectedCaseForAction) {
+                                // Match the physical service report filename
+                                const physicalReport = (manualReportNumber.trim() || selectedCaseForAction.serviceReportNumber || `SR-2026-${selectedCaseForAction.ticketNumber}`).trim();
+                                const fileExt = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : '.pdf';
+                                const reportFileName = physicalReport.toLowerCase().endsWith(fileExt.toLowerCase())
+                                  ? physicalReport
+                                  : `${physicalReport}${fileExt}`;
+
                                 setManualUploadedFile({
-                                  name: file.name,
+                                  name: reportFileName,
                                   size: file.size,
                                   type: file.type,
                                 });
@@ -1275,9 +1354,10 @@ export const MyDeskView: React.FC = () => {
                                 try {
                                   const attItem = await uploadAttachmentToGoogleDrive(
                                     file,
-                                    file.name,
+                                    reportFileName,
                                     'ServiceReport',
-                                    selectedCaseForAction.ticketNumber
+                                    selectedCaseForAction.ticketNumber,
+                                    true
                                   );
                                   setManualUploadedItem(attItem);
                                   if (attItem.driveLink) {
@@ -1300,7 +1380,7 @@ export const MyDeskView: React.FC = () => {
                               <div className="flex flex-col items-center space-y-1.5 py-1">
                                 <Loader2 className="w-7 h-7 text-emerald-600 animate-spin" />
                                 <span className="text-xs font-bold text-emerald-800">
-                                  Auto-Saving & Uploading to Google Drive...
+                                  Auto-Saving & Uploading to Google Drive as Physical Report...
                                 </span>
                               </div>
                             ) : (
@@ -1310,14 +1390,14 @@ export const MyDeskView: React.FC = () => {
                                   {manualUploadedItem || manualUploadedFile ? (
                                     <span className="text-emerald-700 font-extrabold flex items-center space-x-1.5 justify-center">
                                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                      <span>Attached & Saved to Drive: {manualUploadedFile?.name}</span>
+                                      <span>Attached & Saved to Drive as: {manualUploadedFile?.name || manualUploadedItem?.name}</span>
                                     </span>
                                   ) : (
                                     'Click or Drag scanned report here to attach'
                                   )}
                                 </span>
                                 <span className="text-[10px] text-slate-500">
-                                  File will be automatically uploaded and saved directly to Sharq Medical Google Drive.
+                                  Filename will automatically match the Physical Service Report number in Google Drive.
                                 </span>
                               </>
                             )}
@@ -1331,11 +1411,11 @@ export const MyDeskView: React.FC = () => {
                           <div className="flex items-center space-x-2">
                             <HardDrive className="w-4 h-4 text-emerald-800 shrink-0" />
                             <span className="text-emerald-950 font-medium">
-                              Drive Target: <strong className="font-mono">{manualSerialNumber || 'S/N'}_Service_Report.pdf</strong>
+                              Drive File Target: <strong className="font-mono">{(manualReportNumber.trim() || (selectedCaseForAction ? `SR-2026-${selectedCaseForAction.ticketNumber}` : 'SR-REPORT')).replace(/\.pdf$/i, '')}.pdf</strong>
                             </span>
                           </div>
                           <span className="text-emerald-800 font-bold text-[11px] bg-emerald-200/70 px-2 py-0.5 rounded">
-                            {manualUploadedItem ? 'Ready to Complete' : 'Auto-Sync Active'}
+                            {manualUploadedItem ? 'Saved to Drive' : 'Auto-Sync Active'}
                           </span>
                         </div>
                       )}
@@ -1422,11 +1502,10 @@ export const MyDeskView: React.FC = () => {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs font-bold text-slate-800 uppercase mb-1">
-                            CUSTOMER SIGNATORY NAME <span className="text-red-500">*</span>
+                            CUSTOMER SIGNATORY NAME
                           </label>
                           <input
                             type="text"
-                            required
                             value={customerSignatoryName}
                             onChange={(e) => setCustomerSignatoryName(e.target.value)}
                             placeholder="e.g. Dr. / Eng. Representative Name"
@@ -1539,11 +1618,10 @@ export const MyDeskView: React.FC = () => {
 
                         <div>
                           <label className="block text-xs font-bold text-slate-800 uppercase mb-1">
-                            DOCUMENT / INVOICE NUMBER <span className="text-red-500">*</span>
+                            DOCUMENT / INVOICE NUMBER
                           </label>
                           <input
                             type="text"
-                            required
                             value={docNumber}
                             onChange={(e) => setDocNumber(e.target.value.toUpperCase())}
                             placeholder="e.g. INV-2026-9921 or CAL-88192"
@@ -1755,11 +1833,10 @@ export const MyDeskView: React.FC = () => {
                 {hasInvoice === 'Yes' && (
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                      INVOICE NUMBER <span className="text-red-500">*</span>
+                      INVOICE NUMBER
                     </label>
                     <input
                       type="text"
-                      required
                       value={invoiceNumber}
                       onChange={(e) => setInvoiceNumber(e.target.value.toUpperCase())}
                       placeholder="e.g. INV-2026-9921"

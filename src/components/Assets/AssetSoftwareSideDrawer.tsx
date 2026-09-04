@@ -28,7 +28,7 @@ import {
   Check,
   Microscope,
 } from 'lucide-react';
-import { Department, Asset, SoftwareLicense, AccessoryItem, CustomerSector, PpmFrequency, AttachmentItem, PpmType } from '../../types';
+import { Department, Asset, SoftwareLicense, AccessoryItem, CustomerSector, PpmFrequency, AttachmentItem, PpmType, isGovernmentCustomer, resolveCustomerSector } from '../../types';
 import { EXCEL_SOFTWARE_REGISTRY_URL } from '../Software/SoftwareDirectoryView';
 import { calculateNextPpmDate } from '../../utils/ppmUtils';
 
@@ -464,10 +464,11 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
       return;
     }
 
+    const resolvedSector = resolveCustomerSector(quickCustName, quickCustSector);
     const created = addCustomer({
       name: quickCustName.trim().toUpperCase(),
       location: quickCustLocation.trim() || 'Doha, Qatar',
-      sector: quickCustSector,
+      sector: resolvedSector,
       department: quickCustDept,
       contactPerson: quickCustContact.trim() || undefined,
       phone: quickCustPhone.trim() || undefined,
@@ -1069,7 +1070,11 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                           setShowAssetCustomerDropdown(true);
                           const c = customers.find((cust) => cust.name.toUpperCase() === val.trim().toUpperCase());
                           if (c?.location) setAssetLocation(c.location);
-                          if (c?.sector) setAssetSector(c.sector);
+                          if (isGovernmentCustomer(val)) {
+                            setAssetSector('Government');
+                          } else if (c?.sector) {
+                            setAssetSector(c.sector);
+                          }
                           if (c?.department) setAssetDept(c.department);
                         }}
                         placeholder="Search or select customer..."
@@ -1107,7 +1112,11 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                                 setAssetCustomer(c.name);
                                 setAssetCustomerSearch('');
                                 if (c.location) setAssetLocation(c.location);
-                                if (c.sector) setAssetSector(c.sector);
+                                if (isGovernmentCustomer(c.name)) {
+                                  setAssetSector('Government');
+                                } else if (c.sector) {
+                                  setAssetSector(c.sector);
+                                }
                                 if (c.department) setAssetDept(c.department);
                                 setShowAssetCustomerDropdown(false);
                               }}

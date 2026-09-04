@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AttachmentItem } from '../../types';
 import { useApp } from '../../context/AppContext';
 import {
@@ -27,6 +27,7 @@ interface DriveAttachmentUploaderProps {
   category?: 'ServiceReport' | 'Attachment' | 'JobCard' | 'AssetPassport' | 'Invoice';
   label?: string;
   caseNumber?: string;
+  customFileName?: string;
   maxFiles?: number;
 }
 
@@ -36,6 +37,7 @@ export const DriveAttachmentUploader: React.FC<DriveAttachmentUploaderProps> = (
   category = 'Attachment',
   label = 'Support Attachment / Photo (Optional)',
   caseNumber,
+  customFileName,
   maxFiles = 5,
 }) => {
   const { isGoogleConnected, googleUser, connectGoogle, isAdmin } = useApp();
@@ -46,23 +48,57 @@ export const DriveAttachmentUploader: React.FC<DriveAttachmentUploaderProps> = (
   const [viewerIndex, setViewerIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Sync attachment names to custom name or ticket number if set or changed
+  useEffect(() => {
+    const baseName = customFileName?.trim() || (caseNumber?.trim() ? caseNumber.trim() : '');
+    if (!baseName || attachments.length === 0) return;
+
+    let modified = false;
+    const updated = attachments.map((att, idx) => {
+      const ext = att.name.includes('.') ? att.name.substring(att.name.lastIndexOf('.')) : '';
+      const expectedName = idx === 0 ? `${baseName}${ext}` : `${baseName}-${idx + 1}${ext}`;
+      if (att.name !== expectedName && !att.name.startsWith(baseName)) {
+        modified = true;
+        return { ...att, name: expectedName };
+      }
+      return att;
+    });
+
+    if (modified) {
+      onChange(updated);
+    }
+  }, [caseNumber, customFileName]);
+
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
     const newItems: AttachmentItem[] = [...attachments];
 
+    const baseTargetName = customFileName?.trim()
+      ? customFileName.trim()
+      : (caseNumber && (category === 'Attachment' || category === 'JobCard'))
+        ? caseNumber.trim()
+        : '';
+
     for (let i = 0; i < files.length; i++) {
       if (newItems.length >= maxFiles) break;
       const file = files[i];
-      setUploadProgressMsg(`Processing ${file.name}...`);
+      
+      const ext = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : '';
+      const targetName = baseTargetName
+        ? (newItems.length === 0 ? `${baseTargetName}${ext}` : `${baseTargetName}-${newItems.length + 1}${ext}`)
+        : file.name;
+
+      setUploadProgressMsg(`Uploading to Google Drive as ${targetName}...`);
 
       try {
         const item = await uploadAttachmentToGoogleDrive(
           file,
-          file.name,
+          targetName,
           category as 'ServiceReport' | 'Attachment' | 'JobCard' | 'AssetPassport' | 'Invoice',
-          caseNumber
+          caseNumber,
+          Boolean(baseTargetName)
         );
         newItems.push(item);
       } catch (err) {

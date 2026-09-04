@@ -29,10 +29,11 @@ import {
   MapPin,
   RefreshCw,
 } from 'lucide-react';
-import { Asset, CustomerSector, PpmFrequency, ServiceCase, PpmType } from '../../types';
+import { Asset, CustomerSector, PpmFrequency, ServiceCase, PpmType, AttachmentItem } from '../../types';
 import { analyzePpmStatus, calculateNextPpmDate, filterPpmAssets } from '../../utils/ppmUtils';
 import { generatePpmSchedulePdf } from '../../utils/pdfGenerator';
 import { AssetSoftwareSideDrawer } from '../Assets/AssetSoftwareSideDrawer';
+import { DriveAttachmentUploader } from '../Common/DriveAttachmentUploader';
 
 export const PpmDueView: React.FC = () => {
   const {
@@ -74,6 +75,7 @@ export const PpmDueView: React.FC = () => {
   const [completionEngineer, setCompletionEngineer] = useState<string>('');
   const [completionPpmType, setCompletionPpmType] = useState<PpmType>('Yearly Maintenance');
   const [completionRemarks, setCompletionRemarks] = useState<string>('Routine Planned Preventive Maintenance executed successfully according to manufacturer specs.');
+  const [completionAttachments, setCompletionAttachments] = useState<AttachmentItem[]>([]);
   const [autoGenerateCase, setAutoGenerateCase] = useState<boolean>(true);
   const [completionSuccessMsg, setCompletionSuccessMsg] = useState<string | null>(null);
 
@@ -140,6 +142,7 @@ export const PpmDueView: React.FC = () => {
     setCompletionEngineer(currentUser?.name || users[0]?.name || 'Admin');
     setCompletionPpmType(asset.ppmType || 'Yearly Maintenance');
     setCompletionRemarks('Routine Planned Preventive Maintenance executed successfully according to manufacturer specifications.');
+    setCompletionAttachments([]);
     setAutoGenerateCase(true);
     setCompletionSuccessMsg(null);
   };
@@ -152,11 +155,18 @@ export const PpmDueView: React.FC = () => {
     const freq = completingAsset.ppmFrequency || '6 Months';
     const nextDueDate = calculateNextPpmDate(completionDate, freq);
 
-    // 1. Update Asset with new Last PPM Date and Next PPM Date
+    const primaryAttachment = completionAttachments[0];
+    const reportLink = primaryAttachment?.driveLink || completingAsset.lastPpmReportLink || '';
+
+    // 1. Update Asset with new Last PPM Date, Next PPM Date, and Report Attachment Link
     updateAsset(completingAsset.id, {
       lastPpmDate: completionDate,
       nextPpmDate: nextDueDate,
       ppmType: completionPpmType,
+      lastPpmReportLink: reportLink,
+      attachments: completionAttachments.length > 0
+        ? [...(completingAsset.attachments || []), ...completionAttachments]
+        : completingAsset.attachments,
     });
 
     // 2. Optionally create a completed PPM service call ticket
@@ -175,6 +185,8 @@ export const PpmDueView: React.FC = () => {
         issueDescription: `Scheduled Planned Preventive Maintenance (${freq} - ${completionPpmType}) completed. ${completionRemarks}`,
         status: 'Done',
         scheduledDate: completionDate,
+        attachments: completionAttachments,
+        serviceReportDriveLink: reportLink,
       });
     }
 
@@ -183,6 +195,7 @@ export const PpmDueView: React.FC = () => {
     setTimeout(() => {
       setCompletingAsset(null);
       setCompletionSuccessMsg(null);
+      setCompletionAttachments([]);
     }, 1500);
   };
 
@@ -263,7 +276,7 @@ export const PpmDueView: React.FC = () => {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
+              <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white uppercase">
                 PPM DUE SCHEDULE & MAINTENANCE TRACKER
               </h1>
               <span className="bg-orange-500 text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs animate-pulse">
@@ -999,6 +1012,35 @@ export const PpmDueView: React.FC = () => {
                     onChange={(e) => setCompletionRemarks(e.target.value)}
                     className="w-full px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-1 focus:ring-[#1D3557]"
                   />
+                </div>
+
+                {/* PPM Attachment / Scanned Report with formatted Drive file name */}
+                <div className="pt-1">
+                  {(() => {
+                    const ppmDriveFileName = completingAsset
+                      ? (completingAsset.assetNumber?.trim()
+                          ? `${completingAsset.serialNumber.trim()}(${completingAsset.assetNumber.trim()})-PPM`
+                          : `${completingAsset.serialNumber.trim()}-PPM`)
+                      : '';
+                    return (
+                      <div className="space-y-1.5">
+                        <DriveAttachmentUploader
+                          attachments={completionAttachments}
+                          onChange={setCompletionAttachments}
+                          category="ServiceReport"
+                          customFileName={ppmDriveFileName}
+                          label={`Attach PPM Checklist / Field Service Report`}
+                          maxFiles={3}
+                        />
+                        <div className="flex items-center space-x-1.5 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 font-mono">
+                          <span className="font-bold text-[#1D3557] dark:text-blue-400 uppercase">Google Drive Filename:</span>
+                          <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                            {ppmDriveFileName || 'SERIAL NUMBER( ASSET NUMBER )-PPM'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Checkbox auto-create case */}

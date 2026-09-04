@@ -19,6 +19,8 @@ import {
   ProjectDocumentSubmission,
   ProjectPendingRemark,
   ProjectStage,
+  resolveCustomerSector,
+  isGovernmentCustomer,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -291,10 +293,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           cleanId = `ast-${serialSlug}-${idx + 1}-${idx}`;
         }
         seenIds.add(cleanId);
+        const cleanCust = (a.customerName || '').trim().toUpperCase();
         result.push({
           ...a,
           id: cleanId,
           serialNumber: cleanSerial,
+          customerName: cleanCust,
+          sector: resolveCustomerSector(cleanCust, a.sector),
         });
       }
     });
@@ -319,6 +324,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...c,
           id: cleanId,
           name: cleanName,
+          sector: resolveCustomerSector(cleanName, c.sector),
         });
       }
     });
@@ -350,28 +356,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return result;
   };
 
-  const sanitizeCaseList = (list: ServiceCase[]): ServiceCase[] => {
-    const seenTickets = new Set<string>();
-    const seenIds = new Set<string>();
-    const result: ServiceCase[] = [];
+  const cleanFieldValue = (val: any, fallback: string = 'Service'): string => {
+    if (!val) return fallback;
+    const str = String(val).trim();
+    if (str.startsWith('http') || str.includes('drive.google.com') || str.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || str.includes('folders/')) {
+      return fallback;
+    }
+    return str;
+  };
+
+  const sanitizeCaseList = (list: ServiceCase[], knownDoneTickets?: Set<string>): ServiceCase[] => {
+    const caseMap = new Map<string, ServiceCase>();
     list.forEach((c, idx) => {
       const ticket = (c.ticketNumber || c.caseNumber || c.id || '').trim().toUpperCase();
       if (!ticket) return;
-      if (!seenTickets.has(ticket)) {
-        seenTickets.add(ticket);
-        let cleanId = c.id || `cs-${ticket}`;
-        if (seenIds.has(cleanId)) {
-          cleanId = `cs-${ticket}-${idx + 1}`;
-        }
-        seenIds.add(cleanId);
-        result.push({
-          ...c,
-          id: cleanId,
-          ticketNumber: ticket,
+
+      const cleanDept = cleanFieldValue(c.department, 'Dental');
+      const cleanCall = cleanFieldValue(c.callType || c.workClassification, 'Service');
+      const cleanDrive = (c.serviceReportDriveLink && (c.serviceReportDriveLink.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || c.serviceReportDriveLink.includes('folders/'))) ? '' : (c.serviceReportDriveLink || '');
+      const rawAttUrl = (c as any).attachmentUrl;
+      const cleanAttUrl = (rawAttUrl && (rawAttUrl.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || rawAttUrl.includes('folders/'))) ? '' : (rawAttUrl || '');
+      const cleanAttachments = (c.attachments || []).filter(
+        (a) => !a?.driveLink?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') && !a?.dataUrl?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9')
+      );
+
+      const isDone = (knownDoneTickets && knownDoneTickets.has(ticket)) ||
+        c.status === 'Done' ||
+        Boolean(c.serviceReportNumber && c.serviceReportNumber.trim().toUpperCase().startsWith('SR-'));
+
+      const cleanCust = (c.customerName || '').trim().toUpperCase();
+      const normalized: ServiceCase = {
+        ...c,
+        id: c.id || `cs-${ticket}`,
+        ticketNumber: ticket,
+        caseNumber: ticket,
+        customerName: cleanCust,
+        sector: resolveCustomerSector(cleanCust, c.sector),
+        status: isDone ? 'Done' : (c.status || 'New'),
+        department: cleanDept as any,
+        callType: cleanCall as any,
+        workClassification: cleanCall as any,
+        serviceReportDriveLink: cleanDrive,
+        attachments: cleanAttachments,
+        ...((c as any).attachmentUrl !== undefined ? { attachmentUrl: cleanAttUrl } : {}),
+      };
+
+      if (!caseMap.has(ticket)) {
+        caseMap.set(ticket, normalized);
+      } else {
+        const prev = caseMap.get(ticket)!;
+        const resolvedDone = prev.status === 'Done' || normalized.status === 'Done';
+        caseMap.set(ticket, {
+          ...prev,
+          ...normalized,
+          status: resolvedDone ? 'Done' : (normalized.status || prev.status),
+          serviceReportNumber: normalized.serviceReportNumber || prev.serviceReportNumber || '',
+          serviceReportDriveLink: normalized.serviceReportDriveLink || prev.serviceReportDriveLink || '',
+          remarks: normalized.remarks || prev.remarks || '',
+          closeDate: normalized.closeDate || prev.closeDate || '',
         });
       }
     });
-    return result;
+    return Array.from(caseMap.values());
   };
 
   const sanitizeDoneWorkList = (list: DoneWorkLog[]): DoneWorkLog[] => {
@@ -388,9 +434,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           cleanId = `dw-${ticket}-${idx + 1}-${Date.now()}`;
         }
         seenIds.add(cleanId);
+
+        const cleanDept = cleanFieldValue(dw.department, 'Dental');
+        const cleanCall = cleanFieldValue(dw.callType || dw.workClassification, 'Service');
+        const cleanDrive = (dw.serviceReportDriveLink && (dw.serviceReportDriveLink.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || dw.serviceReportDriveLink.includes('folders/'))) ? '' : (dw.serviceReportDriveLink || '');
+        const cleanAttachments = (dw.attachments || []).filter(
+          (a) => !a?.driveLink?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') && !a?.dataUrl?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9')
+        );
+
         result.push({
           ...dw,
           id: cleanId,
+          department: cleanDept as any,
+          callType: cleanCall as any,
+          workClassification: cleanCall as any,
+          serviceReportDriveLink: cleanDrive,
+          attachments: cleanAttachments,
         });
       }
     });
@@ -1005,10 +1064,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Customer actions
   const addCustomer = (custData: Omit<Customer, 'id' | 'createdAt'>): Customer => {
+    const cleanName = custData.name.trim().toUpperCase();
     const newCust: Customer = {
       ...custData,
       id: `cust-${Date.now()}`,
-      name: custData.name.trim().toUpperCase(),
+      name: cleanName,
+      sector: resolveCustomerSector(cleanName, custData.sector),
       createdAt: new Date().toISOString(),
     };
     setCustomers((prev) => [newCust, ...prev.filter((c) => c.name.toUpperCase() !== newCust.name)].sort((a, b) => a.name.localeCompare(b.name)));
@@ -1082,10 +1143,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCustomers((prev) =>
       prev.map((c) => {
         if (c.id === id) {
+          const newName = custData.name ? custData.name.trim().toUpperCase() : c.name;
           const updated = {
             ...c,
             ...custData,
-            name: custData.name ? custData.name.trim().toUpperCase() : c.name,
+            name: newName,
+            sector: resolveCustomerSector(newName, custData.sector || c.sector),
           };
           updatedCust = updated;
           return updated;
@@ -1246,13 +1309,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Asset actions
   const addAsset = (assetData: Omit<Asset, 'id' | 'createdAt'>): Asset => {
+    const cleanCust = assetData.customerName.trim().toUpperCase();
     const newAsset: Asset = {
       ...assetData,
       id: `ast-${Date.now()}`,
       serialNumber: assetData.serialNumber.trim().toUpperCase(),
       model: assetData.model.trim().toUpperCase(),
       manufacturer: assetData.manufacturer.trim().toUpperCase(),
-      customerName: assetData.customerName.trim().toUpperCase(),
+      customerName: cleanCust,
+      sector: resolveCustomerSector(cleanCust, assetData.sector),
       createdAt: new Date().toISOString(),
     };
     setAssets((prev) => [newAsset, ...prev.filter((a) => a.serialNumber.toUpperCase() !== newAsset.serialNumber)]);
@@ -1330,12 +1395,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAssets((prev) =>
       prev.map((a) => {
         if (a.id === id) {
+          const updatedCust = assetData.customerName ? assetData.customerName.trim().toUpperCase() : a.customerName;
           const updated = {
             ...a,
             ...assetData,
             serialNumber: assetData.serialNumber ? assetData.serialNumber.trim().toUpperCase() : a.serialNumber,
             model: assetData.model ? assetData.model.trim().toUpperCase() : a.model,
-            customerName: assetData.customerName ? assetData.customerName.trim().toUpperCase() : a.customerName,
+            customerName: updatedCust,
+            sector: resolveCustomerSector(updatedCust, assetData.sector || a.sector),
           };
           updatedAssetObj = updated;
           return updated;
@@ -1389,21 +1456,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const pushCaseToGoogleSheet = async (caseItem: ServiceCase): Promise<boolean> => {
     try {
       const webhookUrl = localStorage.getItem('sharq_sheets_webhook_url') || '';
-      let token = await getAccessToken();
-
-      // If not authenticated, try signing in with Google
-      if (!token) {
-        try {
-          const authRes = await googleSignIn();
-          if (authRes) {
-            token = authRes.accessToken;
-            setGoogleUser(authRes.user);
-            setGoogleToken(authRes.accessToken);
-          }
-        } catch (authErr) {
-          console.warn('Google sign-in skipped or dismissed:', authErr);
-        }
-      }
+      const token = await getAccessToken();
 
       // 1. Direct Google Sheets API v4 update/append if OAuth token is available
       if (token) {
@@ -1416,23 +1469,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           console.warn('Direct Google Sheets append/update error:', apiErr);
           if (apiErr.message && (apiErr.message.includes('401') || apiErr.message.includes('UNAUTHENTICATED') || apiErr.message.includes('expired'))) {
             handleAuthExpired('pushCaseToGoogleSheet 401');
-            setSheetsSyncStatus('Google session expired. Click "Connect" to re-authorize live syncing.');
-          } else {
-            setSheetsSyncStatus(`Sheet sync note: ${apiErr.message || 'Check edit permissions'}`);
           }
         }
       }
 
       // 2. Post to server endpoint with token for fallback / logging
-      fetch('/api/sheets/append-case', {
+      fetch('/api/cases/update', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-sheets-webhook': webhookUrl,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify(caseItem),
-      }).catch((e) => console.warn('Server append note:', e));
+        body: JSON.stringify({
+          ticketNumber: caseItem.ticketNumber,
+          id: caseItem.id,
+          updates: caseItem,
+          caseItem,
+        }),
+      }).catch((e) => console.warn('Server case update note:', e));
 
       return true;
     } catch (err: any) {
@@ -1462,13 +1517,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const now = new Date().toISOString();
+    const cleanCust = caseData.customerName.trim().toUpperCase();
 
     const newCase: ServiceCase = {
       ...caseData,
       id: `cs-${Date.now()}`,
       ticketNumber,
       caseNumber: ticketNumber,
-      customerName: caseData.customerName.trim().toUpperCase(),
+      customerName: cleanCust,
+      sector: resolveCustomerSector(cleanCust, caseData.sector),
       serialNumber: caseData.serialNumber ? caseData.serialNumber.trim().toUpperCase() : '',
       model: caseData.model ? caseData.model.trim().toUpperCase() : '',
       createdAt: now,
@@ -1505,14 +1562,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setCases((prev) =>
       prev.map((c) => {
-        if (c.id === caseId) {
+        const targetKey = String(caseId).trim().toUpperCase();
+        const match = c.id === caseId ||
+          (c.ticketNumber && String(c.ticketNumber).trim().toUpperCase() === targetKey) ||
+          (c.caseNumber && String(c.caseNumber).trim().toUpperCase() === targetKey);
+
+        if (match) {
           oldAssignedEngineer = c.assignedEngineerName;
+          const cleanDept = updates.department ? cleanFieldValue(updates.department, 'Dental') : c.department;
+          const cleanCall = updates.callType ? cleanFieldValue(updates.callType, 'Service') : c.callType;
+          const cleanDrive = updates.serviceReportDriveLink !== undefined
+            ? ((updates.serviceReportDriveLink.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || updates.serviceReportDriveLink.includes('folders/')) ? '' : updates.serviceReportDriveLink)
+            : c.serviceReportDriveLink;
+
           const updated: ServiceCase = {
             ...c,
             ...updates,
             customerName: updates.customerName ? updates.customerName.trim().toUpperCase() : c.customerName,
             serialNumber: updates.serialNumber !== undefined ? updates.serialNumber.trim().toUpperCase() : c.serialNumber,
             model: updates.model !== undefined ? updates.model.trim().toUpperCase() : c.model,
+            department: cleanDept,
+            callType: cleanCall,
+            workClassification: cleanCall,
+            serviceReportDriveLink: cleanDrive,
             updatedAt: new Date().toISOString(),
           };
           updatedCaseObj = updated;
@@ -1553,9 +1625,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newLog: DoneWorkLog = {
       ...workData,
       id: `dw-${Date.now()}`,
-      customerName: workData.customerName.trim().toUpperCase(),
-      serialNumber: workData.serialNumber.trim().toUpperCase(),
-      model: workData.model.trim().toUpperCase(),
+      customerName: (workData.customerName || 'CUSTOMER').trim().toUpperCase(),
+      serialNumber: (workData.serialNumber || 'N/A').trim().toUpperCase(),
+      model: (workData.model || 'EQUIPMENT').trim().toUpperCase(),
     };
     setDoneWorkLogs((prev) => [newLog, ...prev]);
 
@@ -1586,14 +1658,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // Update case to Done
-    if (workData.caseId) {
-      updateCase(workData.caseId, {
+    const targetCaseKey = (workData.caseId || workData.ticketNumber || workData.caseNumber || '').toString().trim().toUpperCase();
+    if (targetCaseKey) {
+      updateCase(targetCaseKey, {
         status: 'Done',
         serviceReportNumber: workData.serviceReportNumber,
         serviceReportDriveLink: workData.serviceReportDriveLink,
         invoiceRequired: workData.invoiceRequired,
         invoiceNumber: workData.invoiceNumber,
       });
+      setCases((prev) =>
+        prev.map((c) => {
+          const t = (c.ticketNumber || c.caseNumber || c.id || '').toString().trim().toUpperCase();
+          if (t === targetCaseKey || c.id === workData.caseId) {
+            return {
+              ...c,
+              status: 'Done',
+              serviceReportNumber: workData.serviceReportNumber || c.serviceReportNumber,
+              serviceReportDriveLink: workData.serviceReportDriveLink || c.serviceReportDriveLink,
+              invoiceRequired: workData.invoiceRequired || c.invoiceRequired,
+              invoiceNumber: workData.invoiceNumber || c.invoiceNumber,
+            };
+          }
+          return c;
+        })
+      );
     }
   };
 
@@ -1827,25 +1916,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const data = await fetchLiveDataFromGoogleSheets(activeId);
       if (data) {
-        // 1. Service Cases: Master Database is Single Source of Truth
+        // 1. Done Work Logs & Done Tickets Index
+        const currentDoneTickets = new Set<string>();
+        if (Array.isArray(data.doneWorkLogs)) {
+          const remoteDone = sanitizeDoneWorkList(data.doneWorkLogs);
+          setDoneWorkLogs((prevLogs) => {
+            const pendingLogs = prevLogs.filter((pl) => {
+              const pKey = (pl.ticketNumber || pl.caseNumber || pl.id || '').trim().toUpperCase();
+              return !remoteDone.some((rl) => (rl.ticketNumber || rl.caseNumber || rl.id || '').trim().toUpperCase() === pKey);
+            });
+            const merged = sanitizeDoneWorkList([...pendingLogs, ...remoteDone]);
+            merged.forEach((dw) => {
+              const tk = (dw.ticketNumber || dw.caseNumber || '').trim().toUpperCase();
+              if (tk) currentDoneTickets.add(tk);
+            });
+            return merged;
+          });
+        }
+
+        // 2. Service Cases: Master Database is Single Source of Truth
         if (Array.isArray(data.cases)) {
-          const remoteCases = sanitizeCaseList(data.cases);
           setCases((prevCases) => {
+            // Also collect tickets marked Done locally in prevCases
+            prevCases.forEach((pc) => {
+              if (pc.status === 'Done') {
+                const tk = (pc.ticketNumber || pc.caseNumber || '').trim().toUpperCase();
+                if (tk) currentDoneTickets.add(tk);
+              }
+            });
+
+            const remoteCases = sanitizeCaseList(data.cases, currentDoneTickets);
+
+            // Merge with prevCases: if local was Done, retain Done status and report details!
+            const mergedRemote = remoteCases.map((rc) => {
+              const rTicket = (rc.ticketNumber || rc.caseNumber || '').trim().toUpperCase();
+              const matchingLocal = prevCases.find((lc) =>
+                (rTicket && (lc.ticketNumber || lc.caseNumber || '').trim().toUpperCase() === rTicket) ||
+                (rc.id && lc.id === rc.id)
+              );
+
+              if (matchingLocal && matchingLocal.status === 'Done' && rc.status !== 'Done') {
+                return {
+                  ...rc,
+                  status: 'Done' as const,
+                  serviceReportNumber: matchingLocal.serviceReportNumber || rc.serviceReportNumber,
+                  serviceReportDriveLink: matchingLocal.serviceReportDriveLink || rc.serviceReportDriveLink,
+                  closeDate: matchingLocal.closeDate || rc.closeDate,
+                  remarks: matchingLocal.remarks || rc.remarks,
+                };
+              }
+              if (rTicket && currentDoneTickets.has(rTicket)) {
+                return {
+                  ...rc,
+                  status: 'Done' as const,
+                };
+              }
+              return rc;
+            });
+
             // Retain any locally created or pending cases that have not yet reached remote
             const pendingLocals = prevCases.filter((lc) => {
               const ticketKey = (lc.ticketNumber || lc.caseNumber || '').trim().toUpperCase();
-              const inRemote = remoteCases.some((rc) => 
+              const inRemote = mergedRemote.some((rc) => 
                 (ticketKey && (rc.ticketNumber || rc.caseNumber || '').trim().toUpperCase() === ticketKey) || 
                 (rc.id && rc.id === lc.id)
               );
               return !inRemote;
             });
-            // Remote cases take absolute priority: manual edits in Excel reflect instantly!
-            return sanitizeCaseList([...pendingLocals, ...remoteCases]);
+
+            return sanitizeCaseList([...pendingLocals, ...mergedRemote], currentDoneTickets);
           });
         }
 
-        // 2. Assets: Master Database is Single Source of Truth
+        // 3. Assets: Master Database is Single Source of Truth
         if (Array.isArray(data.assets)) {
           const remoteAssets = sanitizeAssetList(data.assets);
           setAssets((prevAssets) => {
@@ -1862,7 +2005,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
 
-        // 3. Customers: Live reflection from Master Database / Excel
+        // 4. Customers: Live reflection from Master Database / Excel
         if (Array.isArray(data.customers)) {
           const remoteCustomers = sanitizeCustomerList(data.customers);
           setCustomers((prevCustomers) => {
@@ -1877,11 +2020,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
             return sanitizeCustomerList([...pendingLocals, ...remoteCustomers]);
           });
-        }
-
-        // 4. Done Work Logs
-        if (Array.isArray(data.doneWorkLogs)) {
-          setDoneWorkLogs(sanitizeDoneWorkList(data.doneWorkLogs));
         }
 
         // 5. Users / Engineers (Maintain system Admin login access)

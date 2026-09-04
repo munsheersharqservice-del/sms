@@ -21,7 +21,7 @@ import {
   AlertTriangle,
   RefreshCw,
 } from 'lucide-react';
-import { Department, Customer, CustomerSector } from '../../types';
+import { Department, Customer, CustomerSector, isGovernmentCustomer, resolveCustomerSector } from '../../types';
 import { SheetsSyncModal } from '../GoogleSheets/SheetsSyncModal';
 
 export const CustomersView: React.FC = () => {
@@ -96,10 +96,12 @@ export const CustomersView: React.FC = () => {
       return;
     }
 
+    const finalSector = resolveCustomerSector(name, sector);
+
     if (editingCustomer) {
       updateCustomer(editingCustomer.id, {
         name: name.trim().toUpperCase(),
-        sector,
+        sector: finalSector,
         location: location.trim(),
         contactPerson: contactPerson.trim(),
         phone: phone.trim(),
@@ -110,7 +112,7 @@ export const CustomersView: React.FC = () => {
     } else {
       addCustomer({
         name: name.trim().toUpperCase(),
-        sector,
+        sector: finalSector,
         location: location.trim(),
         contactPerson: contactPerson.trim(),
         phone: phone.trim(),
@@ -221,7 +223,7 @@ export const CustomersView: React.FC = () => {
             <Building2 className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
+            <h2 className="text-xs sm:text-sm font-bold tracking-tight text-white uppercase">
               CUSTOMER MASTER DATABASE
             </h2>
           </div>
@@ -557,17 +559,30 @@ export const CustomersView: React.FC = () => {
                 <input
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value.toUpperCase())}
-                  placeholder="e.g. HAMAD MEDICAL CORPORATION"
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase();
+                    setName(val);
+                    if (isGovernmentCustomer(val)) {
+                      setSector('Government');
+                    }
+                  }}
+                  placeholder="e.g. HAMAD MEDICAL CORPORATION (HMC / PHCC)"
                   className="w-full px-3 py-2 text-sm bg-white text-black font-bold uppercase border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-teal-500 placeholder-slate-400"
                 />
               </div>
 
               {/* Customer Sector / Category */}
               <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase mb-1">
-                  CUSTOMER SECTOR / CATEGORY <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-800 uppercase">
+                    CUSTOMER SECTOR / CATEGORY <span className="text-red-500">*</span>
+                  </label>
+                  {isGovernmentCustomer(name) && (
+                    <span className="text-[10px] font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      Government Auto-Assigned (HMC/PHCC/HMDAC)
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
