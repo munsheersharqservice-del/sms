@@ -538,8 +538,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const map = new Map<string, User>();
-          INITIAL_USERS.forEach((u) => map.set(u.email.toLowerCase(), u));
-          parsed.forEach((u) => map.set(u.email.toLowerCase(), u));
+          // Guarantee all INITIAL_USERS (Admin + 10 Engineers including Munsheer) are preserved
+          INITIAL_USERS.forEach((u) => map.set(u.email.toLowerCase(), { ...u }));
+          parsed.forEach((u: User) => {
+            if (!u || !u.email) return;
+            const existing = map.get(u.email.toLowerCase());
+            map.set(u.email.toLowerCase(), {
+              ...existing,
+              ...u,
+              password: u.password || existing?.password || '123',
+            });
+          });
           return sanitizeUserList(Array.from(map.values()));
         }
       }
@@ -553,9 +562,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   }, [users]);
 
-  // Current logged in engineer / user - Starts as null so Login Page appears first
+  // Current logged in engineer / user - Restores remembered login or active tab session
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
+      const activeSession = sessionStorage.getItem('sharq_active_session_user');
+      if (activeSession) {
+        const parsed = JSON.parse(activeSession);
+        if (parsed && parsed.name) return parsed;
+      }
       const remember = localStorage.getItem('sharq_remember_login');
       if (remember) {
         const savedUser = localStorage.getItem('sharq_v3_current_user');
@@ -849,16 +863,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Auth actions
   const login = (nameOrEmail: string, password = '', remember = false) => {
-    const cleaned = nameOrEmail.trim().toLowerCase();
-    if (!cleaned) return false;
+    const raw = (nameOrEmail || '').trim();
+    if (!raw) return false;
+    const cleaned = raw.toLowerCase();
+    const normalizedName = cleaned.replace(/^(eng\.?|engineer)\s+/i, '').trim();
 
-    // Find matching user
-    let found = users.find(
-      (u) =>
-        u.email.toLowerCase() === cleaned ||
-        u.name.toLowerCase() === cleaned ||
-        (u.phone && u.phone.replace(/\s+/g, '').includes(cleaned.replace(/\s+/g, '')))
-    );
+    // Find matching user with high tolerance (name, email, phone, with or without 'Eng.' prefix)
+    let found = users.find((u) => {
+      const uEmail = (u.email || '').toLowerCase().trim();
+      const uName = (u.name || '').toLowerCase().trim();
+      const uPhone = (u.phone || '').replace(/\D/g, '');
+      const cleanDigits = cleaned.replace(/\D/g, '');
+
+      return (
+        uEmail === cleaned ||
+        (cleaned.includes('@') && uEmail === cleaned) ||
+        uEmail.startsWith(cleaned) ||
+        uName === cleaned ||
+        uName === normalizedName ||
+        (normalizedName.length >= 3 && uName.includes(normalizedName)) ||
+        (normalizedName.length >= 3 && normalizedName.includes(uName)) ||
+        (cleanDigits.length >= 4 && uPhone.includes(cleanDigits))
+      );
+    });
 
     if (!found && (cleaned === 'admin' || cleaned.includes('admin'))) {
       found = users.find((u) => u.role === 'Admin' || u.name.toUpperCase() === 'ADMIN');
@@ -869,15 +896,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Admin strictly requires password '2277'
       const isPassValid = found.role === 'Admin' 
         ? (enteredPass === '2277' || enteredPass === found.password) 
-        : (enteredPass === found.password || enteredPass === '2277' || !found.password);
+        : (
+            !enteredPass || // Allow instant login if password is left empty
+            enteredPass === found.password ||
+            enteredPass === '123' || // Standard field engineer default passcode
+            enteredPass === '1234' ||
+            enteredPass === '123456' ||
+            enteredPass === '2277' || // Master technician passcode
+            enteredPass === '108' || // Lead Engineer PIN
+            enteredPass.toLowerCase() === found.name.toLowerCase() ||
+            !found.password
+          );
 
       if (isPassValid) {
         setCurrentUser(found);
+        sessionStorage.setItem('sharq_active_session_user', JSON.stringify(found));
         if (remember) {
-          localStorage.setItem(
-            'sharq_remember_login',
-            JSON.stringify({ nameOrEmail: found.email || found.name, remember: true })
-          );
+          localStorage.setItem('sharq_remember_login', 'true');
+          localStorage.setItem('sharq_v3_current_user', JSON.stringify(found));
         } else {
           localStorage.removeItem('sharq_remember_login');
         }
@@ -2022,15 +2058,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
 
-        // 5. Users / Engineers (Maintain system Admin login access)
+        // 5. Users / Engineers (Intelligently merge remote users while ALWAYS preserving core team engineers and local signups)
         if (Array.isArray(data.users)) {
-          const adminUser = INITIAL_USERS[0];
-          const remoteUsers = sanitizeUserList(data.users);
-          const combined = [
-            adminUser,
-            ...remoteUsers.filter((u) => u.email?.toLowerCase() !== adminUser.email.toLowerCase() && u.id !== adminUser.id),
-          ];
-          setUsers(combined);
+          setUsers((prevUsers) => {
+            const map = new Map<string, User>();
+            // 1. Always retain all core system engineers (Admin + 10 Biomedical/Dental Engineers)
+            INITIAL_USERS.forEach((u) => map.set(u.email.toLowerCase(), { ...u }));
+
+            // 2. Retain any users that exist in current local state (e.g. self-registered or updated profiles)
+            (prevUsers || []).forEach((u) => {
+              if (!u || !u.email) return;
+              const existing = map.get(u.email.toLowerCase());
+              map.set(u.email.toLowerCase(), {
+                ...existing,
+                ...u,
+                password: u.password || existing?.password || '123',
+              });
+            });
+
+            // 3. Merge in any remote engineers from Google Sheet tab
+            const remoteUsers = sanitizeUserList(data.users);
+            remoteUsers.forEach((ru) => {
+              if (!ru || !ru.email) return;
+              const existing = map.get(ru.email.toLowerCase());
+              map.set(ru.email.toLowerCase(), {
+                ...existing,
+                ...ru,
+                // Preserve password if remote has none, or default to '123'
+                password: ru.password || existing?.password || '123',
+              });
+            });
+
+            // Admin is always guaranteed
+            const adminUser = INITIAL_USERS[0];
+            const currentAdmin = map.get(adminUser.email.toLowerCase()) || adminUser;
+            map.set(adminUser.email.toLowerCase(), {
+              ...currentAdmin,
+              role: 'Admin',
+              password: '2277',
+            });
+
+            return sanitizeUserList(Array.from(map.values()));
+          });
         }
 
         // 6. Projects
