@@ -233,20 +233,20 @@ export const ProjectsView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-3.5 sm:space-y-4 pb-12">
       {/* Top Banner */}
-      <div className="bg-slate-900 text-white rounded-xl p-6 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-slate-900 text-white rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-md border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
         <div className="flex items-center space-x-3">
-          <div className="p-3 bg-indigo-600/30 rounded-xl border border-indigo-500/40 text-indigo-400">
-            <FolderGit2 className="w-6 h-6" />
+          <div className="p-2 sm:p-2.5 bg-indigo-600/30 rounded-xl border border-indigo-500/40 text-indigo-400 shrink-0">
+            <FolderGit2 className="w-5 h-5" />
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <h2 className="text-sm sm:text-base font-bold tracking-tight text-white uppercase">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xs sm:text-sm md:text-base font-bold tracking-tight text-white uppercase leading-tight">
                 {isAdmin ? 'PROJECT FOLLOW-UP & TURNKEY INSTALLATIONS' : 'MY ASSIGNED PROJECTS & INSTALLATIONS'}
               </h2>
               <span
-                className={`text-xs px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 shrink-0 whitespace-nowrap ${
                   isAdmin
                     ? 'bg-amber-400 text-slate-950 font-black'
                     : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
@@ -261,7 +261,7 @@ export const ProjectsView: React.FC = () => {
         <button
           type="button"
           onClick={() => setIsAddProjectModalOpen(true)}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer shrink-0"
+          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>+ INITIATE NEW PROJECT</span>

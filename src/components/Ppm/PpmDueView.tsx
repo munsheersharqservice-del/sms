@@ -267,19 +267,19 @@ export const PpmDueView: React.FC = () => {
   };
 
   return (
-    <div id="ppm-due-view-container" className="space-y-4 pb-14">
+    <div id="ppm-due-view-container" className="space-y-3.5 sm:space-y-4 pb-14">
       {/* 1. TOP HERO / BANNER */}
-      <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-6 shadow-md border border-slate-800 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div className="flex items-start sm:items-center space-x-3.5">
-          <div className="p-3 bg-orange-500/20 text-[#F26522] rounded-xl border border-orange-500/30 shrink-0">
-            <CalendarCheck className="w-6 h-6 sm:w-7 sm:h-7" />
+      <div className="bg-slate-900 text-white rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-md border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 sm:p-2.5 bg-orange-500/20 text-[#F26522] rounded-xl border border-orange-500/30 shrink-0">
+            <CalendarCheck className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white uppercase">
+              <h1 className="text-xs sm:text-sm md:text-base font-bold tracking-tight text-white uppercase leading-tight">
                 PPM DUE SCHEDULE & MAINTENANCE TRACKER
               </h1>
-              <span className="bg-orange-500 text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs animate-pulse">
+              <span className="bg-orange-500 text-white text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs shrink-0 whitespace-nowrap animate-pulse">
                 {currentMonthName} Focus
               </span>
             </div>
@@ -287,34 +287,34 @@ export const PpmDueView: React.FC = () => {
         </div>
 
         {/* Top Actions */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
           {isAdmin && (
             <button
               type="button"
               onClick={handleDownloadSchedulePdf}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center space-x-1.5 cursor-pointer shadow-xs shrink-0"
             >
-              <Download className="w-4 h-4 text-orange-400" />
-              <span>Download Schedule PDF</span>
+              <Download className="w-3.5 h-3.5 text-orange-400" />
+              <span>Schedule PDF</span>
             </button>
           )}
 
           <button
             type="button"
             onClick={() => handleOpenScheduleMasterModal()}
-            className="px-3.5 py-2 bg-[#1D3557] hover:bg-[#152740] text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center space-x-1.5 cursor-pointer shrink-0 border border-blue-400/30"
+            className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-[#1D3557] hover:bg-[#152740] text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center space-x-1.5 cursor-pointer shrink-0 border border-blue-400/30"
           >
-            <Database className="w-4 h-4 text-blue-300" />
-            <span>SCHEDULE FROM MASTER DATA</span>
+            <Database className="w-3.5 h-3.5 text-blue-300" />
+            <span>SCHEDULE MASTER</span>
           </button>
 
           <button
             type="button"
             onClick={handleOpenAddNewAsset}
-            className="px-4 py-2 bg-[#4CAF50] hover:bg-[#43a047] text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center space-x-1.5 cursor-pointer shrink-0"
+            className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-[#4CAF50] hover:bg-[#43a047] text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center space-x-1.5 cursor-pointer shrink-0"
           >
-            <Plus className="w-4 h-4" />
-            <span>REGISTER ASSET + PPM</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span>+ ASSET PPM</span>
           </button>
         </div>
       </div>

@@ -267,19 +267,19 @@ export const AssetsView: React.FC = () => {
   };
 
   return (
-    <div id="assets-view-container" className="space-y-4 pb-12">
+    <div id="assets-view-container" className="space-y-3.5 sm:space-y-4 pb-12">
       {/* 1. TOP HERO / BANNER (PPM Style) */}
-      <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-6 shadow-md border border-slate-800 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div className="flex items-start sm:items-center space-x-3.5">
-          <div className="p-3 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30 shrink-0">
-            <HardDrive className="w-6 h-6 sm:w-7 sm:h-7" />
+      <div className="bg-slate-900 text-white rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-md border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 sm:p-2.5 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30 shrink-0">
+            <HardDrive className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white uppercase">
+              <h1 className="text-xs sm:text-sm md:text-base font-bold tracking-tight text-white uppercase leading-tight">
                 EQUIPMENT & ASSET DIRECTORY
               </h1>
-              <span className="bg-indigo-600 text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
+              <span className="bg-indigo-600 text-white text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs shrink-0 whitespace-nowrap">
                 {assets.length} Active Systems
               </span>
             </div>
@@ -287,11 +287,11 @@ export const AssetsView: React.FC = () => {
         </div>
 
         {/* Top Actions */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             type="button"
             onClick={() => handleOpenSideDrawerAddAsset()}
-            className="w-full sm:w-auto px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-black transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0 min-h-[44px]"
+            className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>+ REGISTER ASSET</span>
@@ -299,7 +299,7 @@ export const AssetsView: React.FC = () => {
           <button
             type="button"
             onClick={() => handleOpenSideDrawerAddSoftware()}
-            className="w-full sm:w-auto px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs sm:text-sm font-black transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0 min-h-[44px]"
+            className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>+ SOFTWARE LICENSE</span>

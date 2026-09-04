@@ -119,17 +119,17 @@ export const DashboardView: React.FC = () => {
   return (
     <div className="space-y-3 pb-8">
       {/* 1. TOP HERO / BANNER - Compact heading and no subtitle */}
-      <div className="bg-slate-900 text-white rounded-2xl p-3.5 sm:p-4 shadow-md border border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="bg-slate-900 text-white rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-md border border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
         <div className="flex items-center space-x-3">
-          <div className="p-2.5 bg-orange-500/20 text-[#FF5722] rounded-xl border border-orange-500/30 shrink-0">
+          <div className="p-2 sm:p-2.5 bg-orange-500/20 text-[#FF5722] rounded-xl border border-orange-500/30 shrink-0">
             <LayoutDashboard className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white uppercase">
+              <h1 className="text-xs sm:text-sm md:text-base font-bold tracking-tight text-white uppercase leading-tight">
                 SERVICE OPERATIONS DASHBOARD
               </h1>
-              <span className="bg-[#FF5722] text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
+              <span className="bg-[#FF5722] text-white text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs shrink-0 whitespace-nowrap">
                 {baseCases.length} Total Calls
               </span>
             </div>
@@ -137,11 +137,11 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Action button to create call */}
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('new_case')}
-            className="px-3.5 py-2 bg-[#4CAF50] hover:bg-[#43a047] active:bg-[#388e3c] text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0 min-h-[40px]"
+            className="px-3.5 py-2 bg-[#4CAF50] hover:bg-[#43a047] active:bg-[#388e3c] text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>+ NEW SERVICE CALL</span>
