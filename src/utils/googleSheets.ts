@@ -293,9 +293,18 @@ export async function updateCaseInSheet(
     if (colRes.ok) {
       const colData = await colRes.json();
       const colRows: string[][] = colData.values || [];
-      const rowIndex = colRows.findIndex(
-        (r) => r[0] && r[0].toString().trim().toUpperCase() === targetTicket
-      );
+      const targetDigits = targetTicket.replace(/[^0-9]/g, '');
+      const rowIndex = colRows.findIndex((r) => {
+        if (!r[0]) return false;
+        const cellVal = r[0].toString().trim().toUpperCase();
+        const cellDigits = cellVal.replace(/[^0-9]/g, '');
+        return (
+          cellVal === targetTicket ||
+          (targetDigits && cellDigits && targetDigits === cellDigits) ||
+          (targetDigits && cellVal === `TK-${targetDigits}`) ||
+          (cellDigits && `TK-${cellDigits}` === targetTicket)
+        );
+      });
       if (rowIndex >= 0) {
         const rowNum = rowIndex + 1;
         const updateRes = await fetch(
@@ -1455,7 +1464,11 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
       caseNumber: ticket,
       createdAt: r[1] || new Date().toISOString(),
       customerName: custName,
-      assignedEngineerName: (r[3] || 'ENGINEER').toUpperCase().trim(),
+      assignedEngineerName: (() => {
+        const rawEng = (r[3] || 'MUNSHEER').toUpperCase().trim();
+        if (rawEng.startsWith('USR-') || rawEng.startsWith('ENG-')) return 'MUNSHEER';
+        return rawEng || 'MUNSHEER';
+      })(),
       assignedEngineerId: `eng-${(r[3] || 'engineer').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
       status,
       issueDescription: r[5] || 'Equipment inspection & service',

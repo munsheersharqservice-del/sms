@@ -279,6 +279,30 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
     });
   };
 
+  // Canonical Ticket & Identifier Normalization Helpers
+  const normalizeTicketKey = (val: any): string => {
+    if (!val) return '';
+    const s = String(val).trim().toUpperCase();
+    const digits = s.replace(/[^0-9]/g, '');
+    return digits ? `TK-${digits}` : s;
+  };
+
+  const getTicketDigits = (val: any): string => {
+    if (!val) return '';
+    return String(val).replace(/[^0-9]/g, '');
+  };
+
+  const ticketsMatch = (t1: any, t2: any, id1?: any, id2?: any): boolean => {
+    if (id1 && id2 && String(id1).trim().toUpperCase() === String(id2).trim().toUpperCase()) return true;
+    if (!t1 || !t2) return false;
+    const s1 = String(t1).trim().toUpperCase();
+    const s2 = String(t2).trim().toUpperCase();
+    if (s1 === s2) return true;
+    const d1 = s1.replace(/[^0-9]/g, '');
+    const d2 = s2.replace(/[^0-9]/g, '');
+    return Boolean(d1 && d2 && d1 === d2);
+  };
+
   // In-memory OTP & Registered Engineers Store
   interface StoredOtp {
     otp: string;
@@ -741,8 +765,12 @@ service@sharqmedicalsupply.qa`;
           caseNumber: ticket,
           createdAt: r[1] || new Date().toISOString(),
           customerName: (r[2] || '').toUpperCase().trim(),
-          assignedEngineerName: (r[3] || 'MUNSHEER').toUpperCase().trim(),
-          assignedEngineerId: `eng-${(r[3] || 'munsheer').toLowerCase()}`,
+          assignedEngineerName: (() => {
+            const rawEng = (r[3] || 'MUNSHEER').toUpperCase().trim();
+            if (rawEng.startsWith('USR-') || rawEng.startsWith('ENG-')) return 'MUNSHEER';
+            return rawEng || 'MUNSHEER';
+          })(),
+          assignedEngineerId: `eng-${(r[3] || 'munsheer').toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
           status,
           issueDescription: r[5] || 'Equipment inspection & service',
           serialNumber: (r[6] || '').toUpperCase().trim(),
@@ -993,7 +1021,9 @@ service@sharqmedicalsupply.qa`;
       // Merge staged cases (staged edits like EXECUTE & UPDATE CALL take precedence over remote)
       for (const staged of stagedCases) {
         const targetTicket = (staged.ticketNumber || staged.caseNumber || '').trim().toUpperCase();
-        const idx = cases.findIndex((c) => (c.ticketNumber || c.caseNumber || '').trim().toUpperCase() === targetTicket);
+        const idx = cases.findIndex((c) =>
+          ticketsMatch(c.ticketNumber || c.caseNumber, targetTicket, c.id, staged.id)
+        );
         if (idx >= 0) {
           cases[idx] = { ...cases[idx], ...staged };
         } else {
@@ -1021,76 +1051,102 @@ service@sharqmedicalsupply.qa`;
         };
       };
 
+      const registerDoneItem = (item: any) => {
+        const rawTicket = (item.ticketNumber || item.caseNumber || item.serviceReportNumber || item.id || '').toString().trim().toUpperCase();
+        const digits = getTicketDigits(rawTicket);
+        const canonKey = normalizeTicketKey(rawTicket);
+        const dedupeKey = digits ? `DIGIT-${digits}` : (canonKey || rawTicket);
+        if (dedupeKey && !seenDoneKeys.has(dedupeKey)) {
+          seenDoneKeys.add(dedupeKey);
+          if (rawTicket) seenDoneKeys.add(rawTicket);
+          if (canonKey) seenDoneKeys.add(canonKey);
+          finalDoneWorkLogs.push(sanitizeDw(item));
+        }
+      };
+
       // 1. Explicit staged DoneWork logs take highest priority
       for (const dw of stagedDoneWork) {
-        const key = (dw.ticketNumber || dw.caseNumber || dw.serviceReportNumber || dw.id || '').toString().trim().toUpperCase();
-        if (key && !seenDoneKeys.has(key)) {
-          seenDoneKeys.add(key);
-          finalDoneWorkLogs.push(sanitizeDw(dw));
-        }
+        registerDoneItem(dw);
       }
 
       // 2. All cases with status === 'Done'
       for (const rawC of cases) {
         const c = rawC as any;
-        if (c.status === 'Done' || c.serviceReportNumber) {
-          const key = (c.ticketNumber || c.caseNumber || c.serviceReportNumber || c.id || '').toString().trim().toUpperCase();
-          if (key && !seenDoneKeys.has(key)) {
-            seenDoneKeys.add(key);
-            finalDoneWorkLogs.push(sanitizeDw({
-              id: `dw-${c.ticketNumber || c.id || Date.now()}`,
-              caseId: c.id,
-              ticketNumber: c.ticketNumber,
-              caseNumber: c.ticketNumber,
-              customerName: c.customerName,
-              serialNumber: c.serialNumber || 'SN-UNKNOWN',
-              model: c.model || 'Medical Equipment',
-              department: c.department,
-              callType: c.callType,
-              workClassification: c.workClassification || c.callType,
-              engineerName: c.assignedEngineerName || 'ENGINEER',
-              dateCompleted: c.closeDate || (c.createdAt ? c.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
-              hoursSpent: 2.5,
-              workDoneSummary: c.remarks || c.issueDescription || 'Service execution completed successfully.',
-              serviceReportNumber: c.serviceReportNumber || `SR-${c.ticketNumber}`,
-              serviceReportDriveLink: c.serviceReportDriveLink || '',
-              attachments: c.attachments || (c.attachmentUrl ? [c.attachmentUrl] : []),
-              partsReplaced: (c.sparePartsUsed || []).map((p: any) => ({
-                partName: p.itemName || p.partName,
-                partCode: p.itemCode || p.partCode,
-                quantity: p.quantity || 1,
-              })),
-              invoiceRequired: c.invoiceRequired,
-              invoiceNumber: c.invoiceNumber,
-              customerSignatoryName: c.customerSignatoryName || `${c.customerName} Representative`,
-              customerSignature: c.customerSignature || 'Signed Electronically',
-              status: 'Done',
-            }));
-          }
+        if (c.status === 'Done' || c.status === 'Closed' || c.serviceReportNumber) {
+          registerDoneItem({
+            id: `dw-${c.ticketNumber || c.id || Date.now()}`,
+            caseId: c.id,
+            ticketNumber: c.ticketNumber,
+            caseNumber: c.ticketNumber,
+            customerName: c.customerName,
+            serialNumber: c.serialNumber || 'SN-UNKNOWN',
+            model: c.model || 'Medical Equipment',
+            department: c.department,
+            callType: c.callType,
+            workClassification: c.workClassification || c.callType,
+            engineerName: c.assignedEngineerName || 'ENGINEER',
+            dateCompleted: c.closeDate || (c.createdAt ? c.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+            hoursSpent: 2.5,
+            workDoneSummary: c.remarks || c.issueDescription || 'Service execution completed successfully.',
+            serviceReportNumber: c.serviceReportNumber || `SR-${c.ticketNumber}`,
+            serviceReportDriveLink: c.serviceReportDriveLink || '',
+            attachments: c.attachments || (c.attachmentUrl ? [c.attachmentUrl] : []),
+            partsReplaced: (c.sparePartsUsed || []).map((p: any) => ({
+              partName: p.itemName || p.partName,
+              partCode: p.itemCode || p.partCode,
+              quantity: p.quantity || 1,
+            })),
+            invoiceRequired: c.invoiceRequired,
+            invoiceNumber: c.invoiceNumber,
+            customerSignatoryName: c.customerSignatoryName || `${c.customerName} Representative`,
+            customerSignature: c.customerSignature || 'Signed Electronically',
+            status: 'Done',
+          });
         }
       }
 
       // 3. Existing parsed doneWorkLogs from remote sheets
       for (const dw of doneWorkLogs) {
-        const key = (dw.ticketNumber || dw.caseNumber || dw.serviceReportNumber || dw.id || '').toString().trim().toUpperCase();
-        if (key && !seenDoneKeys.has(key)) {
-          seenDoneKeys.add(key);
-          finalDoneWorkLogs.push(sanitizeDw(dw));
-        }
+        registerDoneItem(dw);
       }
 
       // 4. Guarantee consistency: any case present in finalDoneWorkLogs MUST have status: 'Done' in cases!
-      // And cases must be deduplicated by ticketNumber so the same ticket cannot appear as both 'New' and 'Done'.
-      const allDoneTickets = new Set(
-        finalDoneWorkLogs.map((dw) => (dw.ticketNumber || dw.caseNumber || '').trim().toUpperCase()).filter(Boolean)
-      );
+      // Index all forms of completed tickets
+      const allDoneTickets = new Set<string>();
+      for (const dw of finalDoneWorkLogs) {
+        const rawT = String(dw.ticketNumber || dw.caseNumber || '').trim().toUpperCase();
+        const dig = getTicketDigits(rawT);
+        const canon = normalizeTicketKey(rawT);
+        if (rawT) allDoneTickets.add(rawT);
+        if (dig) {
+          allDoneTickets.add(dig);
+          allDoneTickets.add(`TK-${dig}`);
+          allDoneTickets.add(`TK${dig}`);
+        }
+        if (canon) allDoneTickets.add(canon);
+        if (dw.caseId) allDoneTickets.add(String(dw.caseId).trim().toUpperCase());
+      }
 
       const uniqueCasesMap = new Map<string, any>();
       for (const c of cases) {
-        const tKey = (c.ticketNumber || c.caseNumber || c.id || '').trim().toUpperCase();
-        if (!tKey) continue;
+        const rawTicket = String(c.ticketNumber || c.caseNumber || '').trim().toUpperCase();
+        const rawId = String(c.id || '').trim().toUpperCase();
+        const digits = getTicketDigits(rawTicket);
+        const canonicalKey = digits ? `TK-${digits}` : (rawTicket || rawId);
+        if (!canonicalKey) continue;
 
-        const isDone = c.status === 'Done' || allDoneTickets.has(tKey) || (c.serviceReportNumber && c.serviceReportNumber.trim().toUpperCase().startsWith('SR-'));
+        const isDone =
+          c.status === 'Done' ||
+          c.status === 'Closed' ||
+          allDoneTickets.has(rawTicket) ||
+          (digits && allDoneTickets.has(digits)) ||
+          (digits && allDoneTickets.has(`TK-${digits}`)) ||
+          (digits && allDoneTickets.has(`TK${digits}`)) ||
+          allDoneTickets.has(canonicalKey) ||
+          allDoneTickets.has(rawId) ||
+          Boolean(c.serviceReportNumber && c.serviceReportNumber.trim().toUpperCase().startsWith('SR-')) ||
+          Boolean(c.closeDate && c.closeDate.trim());
+
         const resolvedStatus = isDone ? 'Done' : (c.status || 'New');
 
         const currentCase = {
@@ -1098,18 +1154,21 @@ service@sharqmedicalsupply.qa`;
           status: resolvedStatus,
         };
 
-        if (!uniqueCasesMap.has(tKey)) {
-          uniqueCasesMap.set(tKey, currentCase);
+        if (!uniqueCasesMap.has(canonicalKey)) {
+          uniqueCasesMap.set(canonicalKey, currentCase);
         } else {
-          const prev = uniqueCasesMap.get(tKey);
-          uniqueCasesMap.set(tKey, {
+          const prev = uniqueCasesMap.get(canonicalKey);
+          const mergedIsDone = prev.status === 'Done' || currentCase.status === 'Done';
+          uniqueCasesMap.set(canonicalKey, {
             ...prev,
             ...currentCase,
-            status: (prev.status === 'Done' || currentCase.status === 'Done') ? 'Done' : (currentCase.status || prev.status),
+            status: mergedIsDone ? 'Done' : (currentCase.status || prev.status),
             serviceReportNumber: currentCase.serviceReportNumber || prev.serviceReportNumber || '',
             serviceReportDriveLink: currentCase.serviceReportDriveLink || prev.serviceReportDriveLink || '',
             closeDate: currentCase.closeDate || prev.closeDate || '',
             remarks: currentCase.remarks || prev.remarks || '',
+            assignedEngineerName: currentCase.assignedEngineerName || prev.assignedEngineerName || '',
+            assignedEngineerId: currentCase.assignedEngineerId || prev.assignedEngineerId || '',
           });
         }
       }
@@ -2264,10 +2323,8 @@ service@sharqmedicalsupply.qa`;
       const targetTicket = (ticketNumber || data.ticketNumber || data.caseNumber || '').trim().toUpperCase();
       const targetId = id || data.id;
 
-      const targetIdx = stagedCases.findIndex(
-        (c) =>
-          (targetId && c.id === targetId) ||
-          (targetTicket && (c.ticketNumber || c.caseNumber || '').trim().toUpperCase() === targetTicket)
+      const targetIdx = stagedCases.findIndex((c) =>
+        ticketsMatch(c.ticketNumber || c.caseNumber, targetTicket, c.id, targetId)
       );
 
       let savedCase = null;
@@ -2280,9 +2337,10 @@ service@sharqmedicalsupply.qa`;
       }
 
       // If case was marked Done, also record in stagedDoneWork
-      if (savedCase.status === 'Done') {
-        const dwIdx = stagedDoneWork.findIndex(
-          (d) => (d.ticketNumber || d.caseNumber || '').trim().toUpperCase() === targetTicket
+      if (savedCase.status === 'Done' || savedCase.status === 'Closed') {
+        savedCase.status = 'Done';
+        const dwIdx = stagedDoneWork.findIndex((d) =>
+          ticketsMatch(d.ticketNumber || d.caseNumber, targetTicket, d.caseId, targetId)
         );
         const doneLogItem = {
           id: `dw-${savedCase.ticketNumber || savedCase.id || Date.now()}`,
@@ -2314,9 +2372,87 @@ service@sharqmedicalsupply.qa`;
         } else {
           stagedDoneWork.unshift(doneLogItem);
         }
+      } else {
+        const dwIdx = stagedDoneWork.findIndex((d) =>
+          ticketsMatch(d.ticketNumber || d.caseNumber, targetTicket, d.caseId, targetId)
+        );
+        if (dwIdx >= 0) {
+          stagedDoneWork.splice(dwIdx, 1);
+        }
       }
 
       persistCurrentState();
+
+      // Direct Google Sheets API update if OAuth Bearer token is provided
+      const authHeader = req.headers.authorization;
+      const sheetId = (req.query.sheetId as string) || (req.body && req.body.spreadsheetId) || '1q20EnJj-uyT-iGOS-h3kCkAXP7HAiADDtIeNdOsIT9A';
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.replace('Bearer ', '').trim();
+        try {
+          const tab = 'Service_Calls';
+          const checkRes = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tab}!A:A`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (checkRes.ok) {
+            const colData = await checkRes.json();
+            const colRows: string[][] = colData.values || [];
+            const rDigits = getTicketDigits(targetTicket);
+            const rowIndex = colRows.findIndex((r) => {
+              if (!r[0]) return false;
+              const cellVal = r[0].toString().trim().toUpperCase();
+              const cellDigits = getTicketDigits(cellVal);
+              return (
+                cellVal === targetTicket ||
+                (rDigits && cellDigits && rDigits === cellDigits) ||
+                (rDigits && cellVal === `TK-${rDigits}`) ||
+                (cellDigits && `TK-${cellDigits}` === targetTicket)
+              );
+            });
+            const standardSharqRow = [
+              savedCase.ticketNumber || savedCase.caseNumber,
+              savedCase.createdAt ? savedCase.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+              savedCase.customerName,
+              savedCase.assignedEngineerName,
+              savedCase.status,
+              savedCase.issueDescription,
+              savedCase.serialNumber || '',
+              savedCase.department,
+              savedCase.callType || savedCase.workClassification || 'Service',
+              savedCase.warrantyStatus,
+              (savedCase.attachments && savedCase.attachments.length > 0 ? savedCase.attachments[0].driveLink : savedCase.serviceReportDriveLink) || '',
+              savedCase.pendingReason || '',
+              savedCase.invoiceRequired || 'No',
+              savedCase.invoiceNumber || '',
+              savedCase.remarks || '',
+              savedCase.serviceReportNumber || '',
+              savedCase.serviceReportDriveLink || '',
+              savedCase.documentAttachmentFile || '',
+              (savedCase.status === 'Done' ? (savedCase.closeDate || savedCase.updatedAt || new Date().toISOString().split('T')[0]) : '') || '',
+            ];
+            if (rowIndex >= 0) {
+              const rNum = rowIndex + 1;
+              await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tab}!A${rNum}:S${rNum}?valueInputOption=USER_ENTERED`,
+                {
+                  method: 'PUT',
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    range: `${tab}!A${rNum}:S${rNum}`,
+                    majorDimension: 'ROWS',
+                    values: [standardSharqRow],
+                  }),
+                }
+              );
+            }
+          }
+        } catch (apiErr: any) {
+          console.warn('Server direct sheet case update note:', apiErr.message);
+        }
+      }
 
       const webhookUrl = (req.headers['x-sheets-webhook'] as string) || process.env.GOOGLE_APPS_SCRIPT_URL;
       let webhookSuccess = false;

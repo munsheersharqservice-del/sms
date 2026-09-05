@@ -385,12 +385,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         Boolean(c.serviceReportNumber && c.serviceReportNumber.trim().toUpperCase().startsWith('SR-'));
 
       const cleanCust = (c.customerName || '').trim().toUpperCase();
+      let cleanEng = (c.assignedEngineerName || '').trim().toUpperCase();
+      if (!cleanEng || cleanEng.startsWith('USR-') || cleanEng.startsWith('ENG-')) {
+        const matchingUser = users.find((u) => u.id.toLowerCase() === (c.assignedEngineerId || '').toLowerCase() || u.id.toLowerCase() === cleanEng.toLowerCase());
+        cleanEng = matchingUser ? matchingUser.name.toUpperCase() : 'MUNSHEER';
+      }
+
       const normalized: ServiceCase = {
         ...c,
         id: c.id || `cs-${ticket}`,
         ticketNumber: ticket,
         caseNumber: ticket,
         customerName: cleanCust,
+        assignedEngineerName: cleanEng,
         sector: resolveCustomerSector(cleanCust, c.sector),
         status: isDone ? 'Done' : (c.status || 'New'),
         department: cleanDept as any,
@@ -1598,11 +1605,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const webhookUrl = localStorage.getItem('sharq_sheets_webhook_url') || '';
       const token = await getAccessToken();
+      const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
 
       // 1. Direct Google Sheets API v4 update/append if OAuth token is available
       if (token) {
         try {
-          const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
           await updateCaseInSheet(token, activeSheetId, caseItem);
           setSheetsSyncStatus(`Service Call #${caseItem.ticketNumber} saved to Google Sheet (Service_Calls).`);
           setLastSyncedAt(new Date());
@@ -1615,20 +1622,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // 2. Post to server endpoint with token for fallback / logging
-      fetch('/api/cases/update', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sheets-webhook': webhookUrl,
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          ticketNumber: caseItem.ticketNumber,
-          id: caseItem.id,
-          updates: caseItem,
-          caseItem,
-        }),
-      }).catch((e) => console.warn('Server case update note:', e));
+      try {
+        await fetch('/api/cases/update', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-sheets-webhook': webhookUrl,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            ticketNumber: caseItem.ticketNumber,
+            caseNumber: caseItem.ticketNumber,
+            id: caseItem.id,
+            spreadsheetId: activeSheetId,
+            updates: caseItem,
+            caseItem,
+          }),
+        });
+      } catch (e) {
+        console.warn('Server case update note:', e);
+      }
 
       return true;
     } catch (err: any) {
@@ -1698,77 +1711,152 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCase = (caseId: string, updates: Partial<ServiceCase>) => {
-    let updatedCaseObj: ServiceCase | null = null;
-    let oldAssignedEngineer: string | undefined;
+    const targetKey = String(caseId).trim().toUpperCase();
+    const targetNumOnly = targetKey.replace(/[^0-9]/g, '');
+
+    // Synchronously find existing case
+    const existingCase = cases.find((c) => {
+      const cTicket = String(c.ticketNumber || c.caseNumber || '').trim().toUpperCase();
+      const cNumOnly = cTicket.replace(/[^0-9]/g, '');
+      return (
+        c.id === caseId ||
+        (cTicket && cTicket === targetKey) ||
+        (cNumOnly && targetNumOnly && cNumOnly === targetNumOnly)
+      );
+    });
 
     const isMarkedDone = updates.status === 'Done' || (updates.status as string) === 'Closed';
+    const oldAssignedEngineer = existingCase?.assignedEngineerName;
 
-    setCases((prev) =>
-      prev.map((c) => {
-        const targetKey = String(caseId).trim().toUpperCase();
-        const targetNumOnly = targetKey.replace(/[^0-9]/g, '');
+    // Build the resolved updated case synchronously
+    const baseCase = existingCase || {
+      id: caseId,
+      ticketNumber: targetKey,
+      caseNumber: targetKey,
+      customerName: 'CUSTOMER',
+      assignedEngineerName: 'ENGINEER',
+      assignedEngineerId: 'eng-unknown',
+      status: 'New' as CaseStatus,
+      issueDescription: '',
+      department: 'Dental',
+      callType: 'Service',
+      workClassification: 'Service',
+      warrantyStatus: 'Non-Warranty' as WarrantyStatus,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } as ServiceCase;
+
+    const cleanDept = updates.department ? cleanFieldValue(updates.department, 'Dental') : baseCase.department;
+    const cleanCall = updates.callType ? cleanFieldValue(updates.callType, 'Service') : baseCase.callType;
+    const cleanDrive = updates.serviceReportDriveLink !== undefined
+      ? ((updates.serviceReportDriveLink.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || updates.serviceReportDriveLink.includes('folders/')) ? '' : updates.serviceReportDriveLink)
+      : baseCase.serviceReportDriveLink;
+
+    const resolvedStatus: CaseStatus = isMarkedDone ? 'Done' : (updates.status || baseCase.status);
+
+    const updatedCaseObj: ServiceCase = {
+      ...baseCase,
+      ...updates,
+      status: resolvedStatus,
+      customerName: updates.customerName ? updates.customerName.trim().toUpperCase() : baseCase.customerName,
+      serialNumber: updates.serialNumber !== undefined ? updates.serialNumber.trim().toUpperCase() : baseCase.serialNumber,
+      model: updates.model !== undefined ? updates.model.trim().toUpperCase() : baseCase.model,
+      department: cleanDept,
+      callType: cleanCall,
+      workClassification: cleanCall,
+      serviceReportDriveLink: cleanDrive,
+      closeDate: isMarkedDone ? (updates.closeDate || baseCase.closeDate || new Date().toISOString().split('T')[0]) : baseCase.closeDate,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // 1. Update cases state
+    setCases((prev) => {
+      let matched = false;
+      const nextCases = prev.map((c) => {
         const cTicket = String(c.ticketNumber || c.caseNumber || '').trim().toUpperCase();
         const cNumOnly = cTicket.replace(/[^0-9]/g, '');
-
         const match =
           c.id === caseId ||
           (cTicket && cTicket === targetKey) ||
           (cNumOnly && targetNumOnly && cNumOnly === targetNumOnly);
-
         if (match) {
-          oldAssignedEngineer = c.assignedEngineerName;
-          const cleanDept = updates.department ? cleanFieldValue(updates.department, 'Dental') : c.department;
-          const cleanCall = updates.callType ? cleanFieldValue(updates.callType, 'Service') : c.callType;
-          const cleanDrive = updates.serviceReportDriveLink !== undefined
-            ? ((updates.serviceReportDriveLink.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || updates.serviceReportDriveLink.includes('folders/')) ? '' : updates.serviceReportDriveLink)
-            : c.serviceReportDriveLink;
-
-          const updated: ServiceCase = {
-            ...c,
-            ...updates,
-            customerName: updates.customerName ? updates.customerName.trim().toUpperCase() : c.customerName,
-            serialNumber: updates.serialNumber !== undefined ? updates.serialNumber.trim().toUpperCase() : c.serialNumber,
-            model: updates.model !== undefined ? updates.model.trim().toUpperCase() : c.model,
-            department: cleanDept,
-            callType: cleanCall,
-            workClassification: cleanCall,
-            serviceReportDriveLink: cleanDrive,
-            updatedAt: new Date().toISOString(),
-          };
-          updatedCaseObj = updated;
-          return updated;
+          matched = true;
+          return updatedCaseObj;
         }
         return c;
-      })
-    );
+      });
+      return matched ? nextCases : [updatedCaseObj, ...nextCases];
+    });
 
+    // 2. If marked Done, immediately register in doneWorkLogs state and mark as closed
     if (isMarkedDone) {
       markTicketAsClosed(caseId);
-      if (updatedCaseObj) {
-        markTicketAsClosed((updatedCaseObj as ServiceCase).ticketNumber);
-        markTicketAsClosed((updatedCaseObj as ServiceCase).id);
+      markTicketAsClosed(updatedCaseObj.ticketNumber);
+      markTicketAsClosed(updatedCaseObj.id);
+      const dig = String(updatedCaseObj.ticketNumber || '').replace(/[^0-9]/g, '');
+      if (dig) {
+        markTicketAsClosed(dig);
+        markTicketAsClosed(`TK-${dig}`);
       }
+
+      const newDoneLog: DoneWorkLog = {
+        id: `dw-${updatedCaseObj.ticketNumber || updatedCaseObj.id || Date.now()}`,
+        caseId: updatedCaseObj.id,
+        ticketNumber: updatedCaseObj.ticketNumber,
+        caseNumber: updatedCaseObj.ticketNumber,
+        customerName: updatedCaseObj.customerName,
+        serialNumber: updatedCaseObj.serialNumber || 'SN-UNKNOWN',
+        model: updatedCaseObj.model || 'Medical Equipment',
+        department: updatedCaseObj.department,
+        callType: updatedCaseObj.callType,
+        workClassification: updatedCaseObj.workClassification || updatedCaseObj.callType,
+        engineerName: updatedCaseObj.assignedEngineerName || 'ENGINEER',
+        dateCompleted: updatedCaseObj.closeDate || (updatedCaseObj.createdAt ? updatedCaseObj.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+        hoursSpent: 2.5,
+        workDoneSummary: updatedCaseObj.remarks || updatedCaseObj.issueDescription || 'Service execution completed successfully.',
+        serviceReportNumber: updatedCaseObj.serviceReportNumber || `SR-${updatedCaseObj.ticketNumber}`,
+        serviceReportDriveLink: updatedCaseObj.serviceReportDriveLink || '',
+        attachments: updatedCaseObj.attachments || [],
+        partsReplaced: (updatedCaseObj.sparePartsUsed || []).map((p) => ({
+          partName: p.itemName,
+          partCode: p.itemCode,
+          quantity: p.quantity,
+        })),
+        invoiceRequired: updatedCaseObj.invoiceRequired,
+        invoiceNumber: updatedCaseObj.invoiceNumber,
+        customerSignatoryName: updatedCaseObj.customerSignatoryName || `${updatedCaseObj.customerName} Representative`,
+        customerSignature: updatedCaseObj.customerSignature || 'Signed Electronically',
+        status: 'Done',
+      };
+
+      setDoneWorkLogs((prev) => {
+        const filtered = prev.filter((d) => {
+          const dt = String(d.ticketNumber || d.caseNumber || '').trim().toUpperCase();
+          const dnum = dt.replace(/[^0-9]/g, '');
+          return dt !== updatedCaseObj.ticketNumber && (!dig || dnum !== dig);
+        });
+        return [newDoneLog, ...filtered];
+      });
     }
 
-    if (updatedCaseObj) {
-      pushCaseToGoogleSheet(updatedCaseObj);
+    // 3. Persist to server and sheet
+    pushCaseToGoogleSheet(updatedCaseObj);
 
-      // If assigned engineer was changed or re-assigned, notify them
-      const newEngineer = (updatedCaseObj as ServiceCase).assignedEngineerName;
-      if (newEngineer && newEngineer !== oldAssignedEngineer) {
-        notifyEngineerWorkAssignment({
-          engineerName: newEngineer,
-          ticketNumber: (updatedCaseObj as ServiceCase).ticketNumber,
-          customerName: (updatedCaseObj as ServiceCase).customerName,
-          equipmentModel: (updatedCaseObj as ServiceCase).model,
-          serialNumber: (updatedCaseObj as ServiceCase).serialNumber,
-          department: (updatedCaseObj as ServiceCase).department,
-          callType: (updatedCaseObj as ServiceCase).callType,
-          priority: (updatedCaseObj as ServiceCase).priority,
-          issueDescription: (updatedCaseObj as ServiceCase).issueDescription,
-          workType: 'Service Call Assigned to You',
-        });
-      }
+    // 4. If assigned engineer was changed, dispatch notification
+    const newEngineer = updatedCaseObj.assignedEngineerName;
+    if (newEngineer && newEngineer !== oldAssignedEngineer) {
+      notifyEngineerWorkAssignment({
+        engineerName: newEngineer,
+        ticketNumber: updatedCaseObj.ticketNumber,
+        customerName: updatedCaseObj.customerName,
+        equipmentModel: updatedCaseObj.model,
+        serialNumber: updatedCaseObj.serialNumber,
+        department: updatedCaseObj.department,
+        callType: updatedCaseObj.callType,
+        priority: updatedCaseObj.priority,
+        issueDescription: updatedCaseObj.issueDescription,
+        workType: 'Service Call Assigned to You',
+      });
     }
   };
 
