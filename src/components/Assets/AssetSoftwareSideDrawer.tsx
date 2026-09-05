@@ -1359,8 +1359,8 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                   <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1.5">
                     Select PPM Validation Interval:
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {(['3 Months', '6 Months', '1 Year', 'None'] as PpmFrequency[]).map((freq) => (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {(['3 Months', '6 Months', '1st Maint / 2nd Routine', '1 Year', 'None'] as PpmFrequency[]).map((freq) => (
                       <button
                         key={freq}
                         type="button"
@@ -1373,6 +1373,7 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                       >
                         {freq === '3 Months' && '3 Months (Quarterly)'}
                         {freq === '6 Months' && '6 Months (Semi-Annual)'}
+                        {freq === '1st Maint / 2nd Routine' && '1st Maint, 2nd Routine (2x/Yr)'}
                         {freq === '1 Year' && '1 Year (Annual)'}
                         {freq === 'None' && 'No PPM Required'}
                       </button>
@@ -1383,37 +1384,61 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
                     <div className="pt-2 border-t border-orange-100 space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-extrabold text-orange-950 uppercase flex items-center gap-1.5">
-                          <span>PPM Maintenance Type</span>
+                          <span>PPM Maintenance Classification</span>
                           <span className="text-red-500">*</span>
                         </label>
                         <span className="text-[10px] text-orange-700 font-semibold">
-                          6-Month / Periodic Classification
+                          Semi-Annual / Routine Stage
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <button
                           type="button"
-                          onClick={() => setAssetPpmType('Yearly Maintenance')}
-                          className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
-                            assetPpmType === 'Yearly Maintenance'
+                          onClick={() => setAssetPpmType('1st Maint')}
+                          className={`py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                            assetPpmType === '1st Maint'
                               ? 'bg-[#1D3557] text-white border-[#1D3557] shadow-xs'
                               : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
                           }`}
                         >
                           <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">1</span>
-                          <span>Yearly Maintenance</span>
+                          <span>1st Maint</span>
                         </button>
 
                         <button
                           type="button"
-                          onClick={() => setAssetPpmType('Routine Checkup')}
-                          className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
-                            assetPpmType === 'Routine Checkup'
+                          onClick={() => setAssetPpmType('2nd Routine')}
+                          className={`py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                            assetPpmType === '2nd Routine'
                               ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
                               : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
                           }`}
                         >
                           <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">2</span>
+                          <span>2nd Routine</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setAssetPpmType('Yearly Maintenance')}
+                          className={`py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                            assetPpmType === 'Yearly Maintenance'
+                              ? 'bg-[#1D3557] text-white border-[#1D3557] shadow-xs'
+                              : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
+                          }`}
+                        >
+                          <span>Yearly Maint</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setAssetPpmType('Routine Checkup')}
+                          className={`py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                            assetPpmType === 'Routine Checkup'
+                              ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
+                              : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
+                          }`}
+                        >
                           <span>Routine Checkup</span>
                         </button>
                       </div>

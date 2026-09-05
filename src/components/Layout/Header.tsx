@@ -225,14 +225,16 @@ export const Header: React.FC = () => {
                     <User className="w-3.5 h-3.5 text-[#4CAF50]" />
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setIsAuthOpen(true)}
-                    className="p-1 hover:bg-slate-700 rounded-md text-slate-400 hover:text-white transition-colors cursor-pointer"
-                    title="Switch User / Add Account"
-                  >
-                    <UserCheck className="w-3.5 h-3.5 text-blue-400" />
-                  </button>
+                  {currentUser.role === 'Admin' && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAuthOpen(true)}
+                      className="p-1 hover:bg-slate-700 rounded-md text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      title="Switch User / Add Account"
+                    >
+                      <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+                    </button>
+                  )}
                   
                   <button
                     type="button"

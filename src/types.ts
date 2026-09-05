@@ -60,9 +60,9 @@ export type CustomerFeedbackRating = 'Extremely Satisfied' | 'Satisfied' | 'Diss
 
 export type ServiceAfterStatus = 'Complete' | 'Pending for Spares' | 'Incomplete' | 'Under Observation';
 
-export type PpmFrequency = '3 Months' | '6 Months' | '1 Year' | 'None';
+export type PpmFrequency = '3 Months' | '6 Months' | '1 Year' | '1st Maint / 2nd Routine' | 'None';
 
-export type PpmType = 'Yearly Maintenance' | 'Routine Checkup';
+export type PpmType = 'Yearly Maintenance' | 'Routine Checkup' | '1st Maint' | '2nd Routine';
 
 export type PpmStatus = 'Due This Month' | 'Overdue' | 'Upcoming' | 'None';
 
@@ -128,6 +128,7 @@ export interface Asset {
   ppmType?: PpmType; // Yearly Maintenance, Routine Checkup
   lastPpmDate?: string;
   nextPpmDate?: string;
+  nextPpmDueDate?: string;
   lastPpmReportLink?: string;
   invoiceNo?: string;
   installationReportNumber?: string;

@@ -262,7 +262,8 @@ export const AccountProfileModal: React.FC<AccountProfileModalProps> = ({
             <span>ASSIGNED CALLS ({userCases.length})</span>
           </button>
 
-          {users.length > 1 && (
+          {/* SWITCH USER TAB: Only visible to Admin */}
+          {currentUser?.role === 'Admin' && users.length > 1 && (
             <button
               type="button"
               onClick={() => setActiveProfileTab('switch')}
@@ -669,7 +670,7 @@ export const AccountProfileModal: React.FC<AccountProfileModalProps> = ({
           )}
 
           {/* TAB 4: SWITCH USER ACCOUNT */}
-          {activeTab === 'switch' && (
+          {activeTab === 'switch' && currentUser?.role === 'Admin' && (
             <div className="space-y-3 animate-in fade-in duration-150">
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                 Switch active login session to another registered engineer account:

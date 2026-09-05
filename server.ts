@@ -863,6 +863,7 @@ service@sharqmedicalsupply.qa`;
             warrantyExpiry: r[7] || '',
             ppmFrequency: rawPpmFreq,
             lastPpmDate: rawLastPpm,
+            nextPpmDate: rawNextPpm,
             nextPpmDueDate: rawNextPpm,
             roomWard: rawRoom,
             sector: finalSector,
@@ -1517,6 +1518,8 @@ service@sharqmedicalsupply.qa`;
         }
       }
 
+      persistCurrentState();
+
       return res.json({
         success: true,
         asset: newAsset,
@@ -1704,6 +1707,8 @@ service@sharqmedicalsupply.qa`;
           console.warn('Google Sheet live asset update warning:', sheetErr);
         }
       }
+
+      persistCurrentState();
 
       return res.json({
         success: true,

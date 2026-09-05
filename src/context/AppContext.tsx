@@ -294,12 +294,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         seenIds.add(cleanId);
         const cleanCust = (a.customerName || '').trim().toUpperCase();
+        const rawAny = a as any;
+        const finalNextPpm = a.nextPpmDate || rawAny.nextPpmDueDate || '';
         result.push({
           ...a,
           id: cleanId,
           serialNumber: cleanSerial,
           customerName: cleanCust,
           sector: resolveCustomerSector(cleanCust, a.sector),
+          nextPpmDate: finalNextPpm,
+          nextPpmDueDate: finalNextPpm,
+          ppmFrequency: a.ppmFrequency || 'None',
         });
       }
     });
@@ -1539,29 +1544,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateAsset = (id: string, assetData: Partial<Asset>) => {
-    let updatedAssetObj: Asset | undefined;
+    const existing = assets.find((a) => a.id === id || (assetData.serialNumber && a.serialNumber.trim().toUpperCase() === assetData.serialNumber.trim().toUpperCase()));
+    const updatedCust = assetData.customerName ? assetData.customerName.trim().toUpperCase() : (existing?.customerName || '');
+    const finalNextPpm = assetData.nextPpmDate || (assetData as any)?.nextPpmDueDate || existing?.nextPpmDate || '';
+    
+    const assetToSync: Asset = {
+      ...(existing || {
+        id,
+        serialNumber: assetData.serialNumber || 'SN-UNKNOWN',
+        model: assetData.model || 'Equipment',
+        manufacturer: assetData.manufacturer || 'SHARQ',
+        department: 'Dental',
+        installationDate: new Date().toISOString().split('T')[0],
+        status: 'Active',
+      }),
+      ...assetData,
+      id: existing?.id || id,
+      serialNumber: assetData.serialNumber ? assetData.serialNumber.trim().toUpperCase() : (existing?.serialNumber || ''),
+      model: assetData.model ? assetData.model.trim().toUpperCase() : (existing?.model || ''),
+      customerName: updatedCust,
+      sector: resolveCustomerSector(updatedCust, assetData.sector || existing?.sector),
+      nextPpmDate: finalNextPpm,
+      nextPpmDueDate: finalNextPpm,
+      updatedAt: new Date().toISOString(),
+    };
+
     setAssets((prev) =>
-      prev.map((a) => {
-        if (a.id === id) {
-          const updatedCust = assetData.customerName ? assetData.customerName.trim().toUpperCase() : a.customerName;
-          const updated = {
-            ...a,
-            ...assetData,
-            serialNumber: assetData.serialNumber ? assetData.serialNumber.trim().toUpperCase() : a.serialNumber,
-            model: assetData.model ? assetData.model.trim().toUpperCase() : a.model,
-            customerName: updatedCust,
-            sector: resolveCustomerSector(updatedCust, assetData.sector || a.sector),
-          };
-          updatedAssetObj = updated;
-          return updated;
-        }
-        return a;
-      })
+      prev.map((a) => (a.id === assetToSync.id || a.serialNumber.toUpperCase() === assetToSync.serialNumber.toUpperCase() ? assetToSync : a))
     );
 
-    if (updatedAssetObj) {
-      const assetToSync = updatedAssetObj;
-      getAccessToken().then(async (token) => {
+    getAccessToken().then(async (token) => {
         try {
           const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
 
@@ -1593,7 +1605,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           console.warn('Asset update sync note:', e);
         }
       });
-    }
   };
 
   const deleteAsset = (id: string) => {
@@ -2309,7 +2320,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               );
               return !inRemote;
             });
-            return sanitizeAssetList([...pendingLocals, ...remoteAssets]);
+            // Merge remote assets, preserving local PPM schedule edits if set
+            const mergedRemote = remoteAssets.map((ra) => {
+              const serialKey = (ra.serialNumber || '').trim().toUpperCase();
+              const matchedLocal = prevAssets.find(
+                (la) =>
+                  (serialKey && (la.serialNumber || '').trim().toUpperCase() === serialKey) ||
+                  (la.id && la.id === ra.id)
+              );
+              if (matchedLocal) {
+                return {
+                  ...ra,
+                  ppmFrequency: (matchedLocal.ppmFrequency && matchedLocal.ppmFrequency !== 'None') ? matchedLocal.ppmFrequency : ra.ppmFrequency,
+                  ppmType: matchedLocal.ppmType || ra.ppmType,
+                  lastPpmDate: matchedLocal.lastPpmDate || ra.lastPpmDate,
+                  nextPpmDate: matchedLocal.nextPpmDate || ra.nextPpmDate,
+                };
+              }
+              return ra;
+            });
+            return sanitizeAssetList([...pendingLocals, ...mergedRemote]);
           });
         }
 

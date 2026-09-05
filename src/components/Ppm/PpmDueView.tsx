@@ -54,6 +54,7 @@ export const PpmDueView: React.FC = () => {
   const [sectorFilter, setSectorFilter] = useState<'ALL' | CustomerSector>('ALL');
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [monthFilter, setMonthFilter] = useState<string>('ALL');
 
   // Side Drawer & Modal States
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -64,7 +65,7 @@ export const PpmDueView: React.FC = () => {
   const [masterSearch, setMasterSearch] = useState('');
   const [selectedMasterAsset, setSelectedMasterAsset] = useState<Asset | null>(null);
   const [masterFrequency, setMasterFrequency] = useState<PpmFrequency>('6 Months');
-  const [masterPpmType, setMasterPpmType] = useState<PpmType>('Yearly Maintenance');
+  const [masterPpmType, setMasterPpmType] = useState<PpmType>('1st Maint');
   const [masterLastPpmDate, setMasterLastPpmDate] = useState('');
   const [masterNextPpmDate, setMasterNextPpmDate] = useState('');
   const [masterSuccessMsg, setMasterSuccessMsg] = useState<string | null>(null);
@@ -73,7 +74,7 @@ export const PpmDueView: React.FC = () => {
   const [completingAsset, setCompletingAsset] = useState<Asset | null>(null);
   const [completionDate, setCompletionDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [completionEngineer, setCompletionEngineer] = useState<string>('');
-  const [completionPpmType, setCompletionPpmType] = useState<PpmType>('Yearly Maintenance');
+  const [completionPpmType, setCompletionPpmType] = useState<PpmType>('1st Maint');
   const [completionRemarks, setCompletionRemarks] = useState<string>('Routine Planned Preventive Maintenance executed successfully according to manufacturer specs.');
   const [completionAttachments, setCompletionAttachments] = useState<AttachmentItem[]>([]);
   const [autoGenerateCase, setAutoGenerateCase] = useState<boolean>(true);
@@ -119,6 +120,53 @@ export const PpmDueView: React.FC = () => {
     };
   }, [assets]);
 
+  // Dynamically compute available months and counts from assets
+  const availableMonths = useMemo(() => {
+    const counts: Record<string, { label: string; count: number }> = {};
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    // Seed previous month, current month, and next 12 months
+    const today = new Date();
+    for (let i = -1; i <= 12; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      counts[key] = {
+        label: `${monthNames[d.getMonth()]} ${d.getFullYear()}`,
+        count: 0,
+      };
+    }
+
+    assets.forEach((ast) => {
+      if (!ast.nextPpmDate) return;
+      const clean = ast.nextPpmDate.trim();
+      let ym = clean.slice(0, 7);
+      const parsed = new Date(clean);
+      if (!isNaN(parsed.getTime())) {
+        ym = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
+        if (!counts[ym]) {
+          counts[ym] = {
+            label: `${monthNames[parsed.getMonth()]} ${parsed.getFullYear()}`,
+            count: 0,
+          };
+        }
+      }
+      if (counts[ym]) {
+        counts[ym].count++;
+      }
+    });
+
+    return Object.entries(counts)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([value, info]) => ({
+        value,
+        label: info.label,
+        count: info.count,
+      }));
+  }, [assets]);
+
   // Filtered Assets list
   const filteredList = useMemo(() => {
     return filterPpmAssets(assets, {
@@ -126,8 +174,9 @@ export const PpmDueView: React.FC = () => {
       sectorFilter,
       departmentFilter,
       searchQuery,
+      monthFilter,
     });
-  }, [assets, statusTab, sectorFilter, departmentFilter, searchQuery]);
+  }, [assets, statusTab, sectorFilter, departmentFilter, searchQuery, monthFilter]);
 
   // Handler: 1-Click Create PPM Case
   const handleCreatePpmCase = (asset: Asset) => {
@@ -319,14 +368,17 @@ export const PpmDueView: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. STATS / KPI METRICS CARDS */}
+      {/* 2. STATS / KPI METRICS CARDS & SEARCH BY MONTH */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
         {/* A. Due This Month (Highlight) */}
         <button
           type="button"
-          onClick={() => setStatusTab('DUE_THIS_MONTH')}
+          onClick={() => {
+            setStatusTab('DUE_THIS_MONTH');
+            setMonthFilter('ALL');
+          }}
           className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer shadow-2xs col-span-2 sm:col-span-1 ${
-            statusTab === 'DUE_THIS_MONTH'
+            statusTab === 'DUE_THIS_MONTH' && monthFilter === 'ALL'
               ? 'bg-orange-500/10 border-orange-500 ring-2 ring-orange-500/20'
               : isDarkMode
               ? 'bg-slate-900 border-slate-800 hover:border-orange-500/50'
@@ -356,9 +408,12 @@ export const PpmDueView: React.FC = () => {
         {/* B. Overdue */}
         <button
           type="button"
-          onClick={() => setStatusTab('OVERDUE')}
+          onClick={() => {
+            setStatusTab('OVERDUE');
+            setMonthFilter('ALL');
+          }}
           className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer shadow-2xs ${
-            statusTab === 'OVERDUE'
+            statusTab === 'OVERDUE' && monthFilter === 'ALL'
               ? 'bg-rose-500/10 border-rose-500 ring-2 ring-rose-500/20'
               : isDarkMode
               ? 'bg-slate-900 border-slate-800 hover:border-rose-500/50'
@@ -385,9 +440,12 @@ export const PpmDueView: React.FC = () => {
         {/* C. Upcoming */}
         <button
           type="button"
-          onClick={() => setStatusTab('UPCOMING')}
+          onClick={() => {
+            setStatusTab('UPCOMING');
+            setMonthFilter('ALL');
+          }}
           className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer shadow-2xs ${
-            statusTab === 'UPCOMING'
+            statusTab === 'UPCOMING' && monthFilter === 'ALL'
               ? 'bg-teal-500/10 border-teal-500 ring-2 ring-teal-500/20'
               : isDarkMode
               ? 'bg-slate-900 border-slate-800 hover:border-teal-500/50'
@@ -411,73 +469,123 @@ export const PpmDueView: React.FC = () => {
           </div>
         </button>
 
-        {/* D. Government Sector Breakdown */}
+        {/* D. Total Active PPM Assets */}
         <button
           type="button"
           onClick={() => {
-            setSectorFilter(sectorFilter === 'Government' ? 'ALL' : 'Government');
+            setStatusTab('ALL');
+            setSectorFilter('ALL');
+            setMonthFilter('ALL');
           }}
           className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer shadow-2xs ${
-            sectorFilter === 'Government'
-              ? 'bg-blue-500/10 border-blue-500 ring-2 ring-blue-500/20'
+            statusTab === 'ALL' && sectorFilter === 'ALL' && monthFilter === 'ALL'
+              ? 'bg-slate-800 text-white border-slate-800 ring-2 ring-slate-500/20'
               : isDarkMode
-              ? 'bg-slate-900 border-slate-800 hover:border-blue-500/50'
-              : 'bg-white border-slate-200 hover:border-blue-400'
+              ? 'bg-slate-900 border-slate-800 hover:border-slate-700'
+              : 'bg-white border-slate-200 hover:border-slate-400'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide flex items-center gap-1">
-              <Building2 className="w-3 h-3 text-blue-500" />
-              Government
+            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+              Total Scheduled
             </span>
-            <span className="text-[9px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold px-1.5 py-0.5 rounded">
-              Govt
-            </span>
+            <Calendar className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl sm:text-3xl font-black font-mono text-blue-600 dark:text-blue-400">
-              {metrics.govtCount}
+            <span className="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white">
+              {metrics.totalWithPpm}
             </span>
             <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Assets</span>
           </div>
           <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 truncate">
-            HMC, PHCC, QAF, Police
+            Active PPM master registry
           </div>
         </button>
 
-        {/* E. Private Sector Breakdown */}
-        <button
-          type="button"
-          onClick={() => {
-            setSectorFilter(sectorFilter === 'Private' ? 'ALL' : 'Private');
-          }}
-          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer shadow-2xs ${
-            sectorFilter === 'Private'
-              ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/20'
-              : isDarkMode
-              ? 'bg-slate-900 border-slate-800 hover:border-purple-500/50'
-              : 'bg-white border-slate-200 hover:border-purple-400'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wide flex items-center gap-1">
-              <Building className="w-3 h-3 text-purple-500" />
-              Private
-            </span>
-            <span className="text-[9px] bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold px-1.5 py-0.5 rounded">
-              Pvt
-            </span>
+        {/* E. SEARCH BY MONTH & SMALL SECTORS */}
+        <div className={`p-3 rounded-xl border text-left shadow-2xs col-span-2 sm:col-span-2 lg:col-span-1 flex flex-col justify-between ${
+          monthFilter !== 'ALL'
+            ? 'bg-orange-50/50 dark:bg-orange-950/20 border-orange-400 ring-2 ring-orange-400/20'
+            : isDarkMode
+            ? 'bg-slate-900 border-slate-800'
+            : 'bg-white border-slate-200'
+        }`}>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-wide flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-orange-500" />
+                <span>Search by Month</span>
+              </span>
+              {monthFilter !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setMonthFilter('ALL')}
+                  className="text-[10px] font-bold text-rose-500 hover:underline cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <select
+              value={monthFilter}
+              onChange={(e) => {
+                setMonthFilter(e.target.value);
+                if (e.target.value !== 'ALL') {
+                  setStatusTab('ALL');
+                }
+              }}
+              className="w-full text-xs font-bold px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-1 focus:ring-orange-500"
+            >
+              <option value="ALL">All Months ({metrics.totalWithPpm})</option>
+              {availableMonths.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label} ({m.count} Due)
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl sm:text-3xl font-black font-mono text-purple-600 dark:text-purple-400">
-              {metrics.privateCount}
-            </span>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Assets</span>
+
+          {/* Compact Government & Private Sector Options */}
+          <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSectorFilter(sectorFilter === 'Government' ? 'ALL' : 'Government')}
+              className={`px-2 py-1 text-[10px] font-black rounded-md border flex items-center gap-1 transition-all cursor-pointer shrink-0 ${
+                sectorFilter === 'Government'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                  : 'bg-slate-50 dark:bg-slate-800 text-blue-700 dark:text-blue-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+              }`}
+              title="Filter Government Sector"
+            >
+              <Building2 className="w-2.5 h-2.5" />
+              <span>Govt ({metrics.govtCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSectorFilter(sectorFilter === 'Private' ? 'ALL' : 'Private')}
+              className={`px-2 py-1 text-[10px] font-black rounded-md border flex items-center gap-1 transition-all cursor-pointer shrink-0 ${
+                sectorFilter === 'Private'
+                  ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                  : 'bg-slate-50 dark:bg-slate-800 text-purple-700 dark:text-purple-300 border-slate-200 dark:border-slate-700 hover:border-purple-400'
+              }`}
+              title="Filter Private Sector"
+            >
+              <Building className="w-2.5 h-2.5" />
+              <span>Pvt ({metrics.privateCount})</span>
+            </button>
+
+            {sectorFilter !== 'ALL' && (
+              <button
+                type="button"
+                onClick={() => setSectorFilter('ALL')}
+                className="text-[9px] font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer ml-auto"
+              >
+                Reset
+              </button>
+            )}
           </div>
-          <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 truncate">
-            Hospitals & Private Clinics
-          </div>
-        </button>
+        </div>
       </div>
 
       {/* 3. MULTI-FIELD SEARCH & SECTOR TOGGLE TOOLBAR */}
@@ -556,12 +664,12 @@ export const PpmDueView: React.FC = () => {
             </button>
           </div>
 
-          {/* Sector Filter Buttons (Government vs Private) */}
-          <div className="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700 self-start lg:self-auto">
+          {/* Sector Filter Buttons (Government vs Private) - Compact & Small */}
+          <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-lg border border-slate-200 dark:border-slate-700 self-start lg:self-auto">
             <button
               type="button"
               onClick={() => setSectorFilter('ALL')}
-              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              className={`px-2 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
                 sectorFilter === 'ALL'
                   ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -572,32 +680,32 @@ export const PpmDueView: React.FC = () => {
             <button
               type="button"
               onClick={() => setSectorFilter('Government')}
-              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+              className={`px-2 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
                 sectorFilter === 'Government'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-blue-600'
               }`}
             >
-              <Building2 className="w-3 h-3" />
-              <span>Government</span>
+              <Building2 className="w-2.5 h-2.5" />
+              <span>Govt</span>
             </button>
             <button
               type="button"
               onClick={() => setSectorFilter('Private')}
-              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+              className={`px-2 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
                 sectorFilter === 'Private'
                   ? 'bg-purple-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-purple-600'
               }`}
             >
-              <Building className="w-3 h-3" />
+              <Building className="w-2.5 h-2.5" />
               <span>Private</span>
             </button>
           </div>
         </div>
 
-        {/* Search Bar & Department Filter */}
-        <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-1 border-t border-slate-100 dark:border-slate-800">
+        {/* Search Bar, Search by Month & Department Filter */}
+        <div className="flex flex-col sm:flex-row items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
           <div className="relative flex-1 w-full">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -618,7 +726,42 @@ export const PpmDueView: React.FC = () => {
             )}
           </div>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
+          {/* Search by Month Option */}
+          <div className="flex items-center space-x-1.5 w-full sm:w-auto">
+            <span className="text-xs text-slate-500 font-bold shrink-0 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-orange-500" />
+              <span>Month:</span>
+            </span>
+            <select
+              value={monthFilter}
+              onChange={(e) => {
+                setMonthFilter(e.target.value);
+                if (e.target.value !== 'ALL') {
+                  setStatusTab('ALL');
+                }
+              }}
+              className="w-full sm:w-auto px-2.5 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold focus:outline-hidden focus:ring-1 focus:ring-[#F26522]"
+            >
+              <option value="ALL">📅 Search by Month (All)</option>
+              {availableMonths.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label} ({m.count} Due)
+                </option>
+              ))}
+            </select>
+            {monthFilter !== 'ALL' && (
+              <button
+                type="button"
+                onClick={() => setMonthFilter('ALL')}
+                className="p-1 text-slate-400 hover:text-rose-500 bg-slate-100 dark:bg-slate-800 rounded-md cursor-pointer"
+                title="Clear Month Filter"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-1.5 w-full sm:w-auto">
             <span className="text-xs text-slate-500 font-bold shrink-0">Dept:</span>
             <select
               value={departmentFilter}
@@ -634,6 +777,26 @@ export const PpmDueView: React.FC = () => {
             </select>
           </div>
         </div>
+
+        {/* Active Month Filter Notification Banner if Filtered */}
+        {monthFilter !== 'ALL' && (
+          <div className="flex items-center justify-between px-3 py-1.5 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800/60 rounded-lg text-xs">
+            <div className="flex items-center gap-2 text-orange-800 dark:text-orange-300">
+              <Calendar className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+              <span>
+                Filtering by Month: <strong className="font-mono font-black">{availableMonths.find(m => m.value === monthFilter)?.label || monthFilter}</strong> ({filteredList.length} assets found)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMonthFilter('ALL')}
+              className="text-[11px] font-bold text-orange-700 dark:text-orange-300 hover:underline cursor-pointer flex items-center gap-1"
+            >
+              <span>Clear Filter</span>
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 4. EQUIPMENT PPM LIST */}
@@ -767,11 +930,21 @@ export const PpmDueView: React.FC = () => {
                         </span>
                         {asset.ppmType && (
                           <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full ${
-                            asset.ppmType === 'Yearly Maintenance'
+                            asset.ppmType === '1st Maint'
                               ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-800'
-                              : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800'
+                              : asset.ppmType === '2nd Routine'
+                              ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800'
+                              : asset.ppmType === 'Yearly Maintenance'
+                              ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-200 border border-indigo-300 dark:border-indigo-800'
+                              : 'bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-200 border border-teal-300 dark:border-teal-800'
                           }`}>
-                            {asset.ppmType === 'Yearly Maintenance' ? '1-Yearly' : '2-Routine'}
+                            {asset.ppmType === '1st Maint'
+                              ? '1st Maint'
+                              : asset.ppmType === '2nd Routine'
+                              ? '2nd Routine'
+                              : asset.ppmType === 'Yearly Maintenance'
+                              ? '1-Yearly'
+                              : '2-Routine'}
                           </span>
                         )}
                       </div>
@@ -1215,8 +1388,8 @@ export const PpmDueView: React.FC = () => {
                         <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                           PPM Interval / Frequency:
                         </label>
-                        <div className="grid grid-cols-4 gap-2">
-                          {(['3 Months', '6 Months', '1 Year', 'None'] as PpmFrequency[]).map((freq) => (
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                          {(['3 Months', '6 Months', '1st Maint / 2nd Routine', '1 Year', 'None'] as PpmFrequency[]).map((freq) => (
                             <button
                               key={freq}
                               type="button"
@@ -1235,7 +1408,7 @@ export const PpmDueView: React.FC = () => {
                                   : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
                               }`}
                             >
-                              {freq}
+                              {freq === '1st Maint / 2nd Routine' ? '1st Maint / 2nd Routine (2x/Yr)' : freq}
                             </button>
                           ))}
                         </div>
@@ -1247,31 +1420,55 @@ export const PpmDueView: React.FC = () => {
                           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                             PPM Maintenance Classification:
                           </label>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             <button
                               type="button"
-                              onClick={() => setMasterPpmType('Yearly Maintenance')}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
-                                masterPpmType === 'Yearly Maintenance'
+                              onClick={() => setMasterPpmType('1st Maint')}
+                              className={`py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                                masterPpmType === '1st Maint'
                                   ? 'bg-[#1D3557] text-white border-[#1D3557] shadow-xs'
                                   : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
                               }`}
                             >
                               <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">1</span>
-                              <span>1 - Yearly Maintenance</span>
+                              <span>1st Maint</span>
                             </button>
 
                             <button
                               type="button"
-                              onClick={() => setMasterPpmType('Routine Checkup')}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
-                                masterPpmType === 'Routine Checkup'
+                              onClick={() => setMasterPpmType('2nd Routine')}
+                              className={`py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                                masterPpmType === '2nd Routine'
                                   ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
                                   : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
                               }`}
                             >
                               <span className="w-4 h-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center font-black">2</span>
-                              <span>2 - Routine Checkup</span>
+                              <span>2nd Routine</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setMasterPpmType('Yearly Maintenance')}
+                              className={`py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                                masterPpmType === 'Yearly Maintenance'
+                                  ? 'bg-[#1D3557] text-white border-[#1D3557] shadow-xs'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                              }`}
+                            >
+                              <span>Yearly Maint</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setMasterPpmType('Routine Checkup')}
+                              className={`py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                                masterPpmType === 'Routine Checkup'
+                                  ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                              }`}
+                            >
+                              <span>Routine Checkup</span>
                             </button>
                           </div>
                         </div>

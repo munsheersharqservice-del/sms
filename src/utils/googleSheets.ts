@@ -1592,6 +1592,7 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
         warrantyExpiry: warrantyExp,
         ppmFrequency: ppmFreq,
         lastPpmDate: lastPpm,
+        nextPpmDate: nextPpm,
         nextPpmDueDate: nextPpm,
         roomWard,
         sector: resolveCustomerSector(custName, sector),

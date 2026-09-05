@@ -16,6 +16,9 @@ export function calculateNextPpmDate(baseDateStr: string, frequency: PpmFrequenc
       result.setMonth(result.getMonth() + 3);
       break;
     case '6 Months':
+    case '1st Maint / 2nd Routine':
+    case '2 Routines (1st Maint, 2nd Routine)' as any:
+    case '2 Routines' as any:
       result.setMonth(result.getMonth() + 6);
       break;
     case '1 Year':
@@ -122,6 +125,7 @@ export function filterPpmAssets(
     sectorFilter?: 'ALL' | CustomerSector;
     departmentFilter?: string;
     searchQuery?: string;
+    monthFilter?: string;
   }
 ): Asset[] {
   const {
@@ -129,11 +133,29 @@ export function filterPpmAssets(
     sectorFilter = 'ALL',
     departmentFilter = 'ALL',
     searchQuery = '',
+    monthFilter = 'ALL',
   } = options;
 
   const cleanSearch = searchQuery.trim().toLowerCase();
 
   return assets.filter((asset) => {
+    // 0. Month filter (if specified)
+    if (monthFilter && monthFilter !== 'ALL') {
+      if (!asset.nextPpmDate) return false;
+      const cleanDate = asset.nextPpmDate.trim();
+      let matchesMonth = cleanDate.startsWith(monthFilter);
+      if (!matchesMonth) {
+        const parsed = new Date(cleanDate);
+        if (!isNaN(parsed.getTime())) {
+          const ym = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
+          matchesMonth = ym === monthFilter;
+        }
+      }
+      if (!matchesMonth) {
+        return false;
+      }
+    }
+
     // 1. PPM Frequency validation
     const hasPpm = asset.ppmFrequency && asset.ppmFrequency !== 'None';
     if (statusFilter !== 'ALL' && !hasPpm && !asset.nextPpmDate) {
