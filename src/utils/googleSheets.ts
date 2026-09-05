@@ -1,5 +1,6 @@
 import { Asset, ServiceCase, DoneWorkLog, RequestItem, ServiceProject, SoftwareLicense, Customer, SparePartItem, User, ManufacturerModel, Department, resolveCustomerSector } from '../types';
 import { handleAuthExpired } from './firebaseAuth';
+import { PERSISTENT_MASTER_ASSETS, PERSISTENT_MASTER_CASES, PERSISTENT_MASTER_DONE_WORK } from '../data/persistentMasterData';
 
 export const DEFAULT_SPREADSHEET_ID = '1q20EnJj-uyT-iGOS-h3kCkAXP7HAiADDtIeNdOsIT9A';
 export const DEFAULT_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1q20EnJj-uyT-iGOS-h3kCkAXP7HAiADDtIeNdOsIT9A/edit?usp=sharing';
@@ -1517,7 +1518,7 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
   const dedupedCases = Array.from(uniqueCasesMap.values());
 
   const seenDwIds = new Set<string>();
-  const doneWorkLogs = dedupedCases
+  const doneWorkLogs: DoneWorkLog[] = dedupedCases
     .filter((c) => c.status === 'Done' || (c.serviceReportNumber && c.serviceReportNumber.toUpperCase().startsWith('SR-')))
     .map((c, i) => {
       // Ensure status is marked Done
@@ -1551,7 +1552,7 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
     });
 
   const seenAssetIds = new Set<string>();
-  const assets = eqRows
+  const assets: Asset[] = eqRows
     .filter((r) => r[0] && r[0].trim() && !r[0].toLowerCase().includes('serial number') && !r[0].toLowerCase().includes('serial #') && !r[0].toLowerCase().includes('serial'))
     .map((r, i) => {
       const serial = r[0].toUpperCase().trim();
@@ -1804,6 +1805,53 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
         createdAt: r[5] || '2026-01-01',
       };
     });
+
+  // Merge master persistent assets (ensuring PPM schedules and staged edits are never lost in production)
+  for (const staged of PERSISTENT_MASTER_ASSETS) {
+    const serial = (staged.serialNumber || '').trim().toUpperCase();
+    const idx = assets.findIndex(
+      (a) => (serial && (a.serialNumber || '').trim().toUpperCase() === serial) || a.id === staged.id
+    );
+    if (idx >= 0) {
+      assets[idx] = {
+        ...assets[idx],
+        ...staged,
+        nextPpmDate: staged.nextPpmDate || assets[idx].nextPpmDate,
+        nextPpmDueDate: staged.nextPpmDueDate || staged.nextPpmDate || assets[idx].nextPpmDueDate || assets[idx].nextPpmDate,
+        ppmFrequency: (staged.ppmFrequency && staged.ppmFrequency !== 'None') ? staged.ppmFrequency : assets[idx].ppmFrequency,
+        ppmType: staged.ppmType || assets[idx].ppmType,
+        lastPpmDate: staged.lastPpmDate || assets[idx].lastPpmDate,
+      };
+    } else {
+      assets.unshift(staged);
+    }
+  }
+
+  // Merge master persistent cases
+  for (const stagedCase of PERSISTENT_MASTER_CASES) {
+    const tNum = (stagedCase.ticketNumber || stagedCase.caseNumber || '').trim().toUpperCase();
+    const idx = dedupedCases.findIndex(
+      (c) => (tNum && (c.ticketNumber || c.caseNumber || '').trim().toUpperCase() === tNum) || c.id === stagedCase.id
+    );
+    if (idx >= 0) {
+      dedupedCases[idx] = { ...dedupedCases[idx], ...stagedCase };
+    } else {
+      dedupedCases.unshift(stagedCase);
+    }
+  }
+
+  // Merge master persistent done work logs
+  for (const stagedDw of PERSISTENT_MASTER_DONE_WORK) {
+    const tNum = (stagedDw.ticketNumber || stagedDw.caseNumber || '').trim().toUpperCase();
+    const idx = doneWorkLogs.findIndex(
+      (dw) => (tNum && (dw.ticketNumber || dw.caseNumber || '').trim().toUpperCase() === tNum) || dw.id === stagedDw.id
+    );
+    if (idx >= 0) {
+      doneWorkLogs[idx] = { ...doneWorkLogs[idx], ...stagedDw };
+    } else {
+      doneWorkLogs.unshift(stagedDw);
+    }
+  }
 
   return {
     cases: dedupedCases,

@@ -1,4 +1,4 @@
-export type Department = 'Medical' | 'Dental' | 'Derma' | 'Lab' | 'Software' | 'Both';
+export type Department = 'Medical' | 'Dental' | 'Derma' | 'Lab' | 'Software' | 'Both' | 'Service';
 
 export type WorkClassification =
   | 'Service'
@@ -24,7 +24,7 @@ export type PendingReason =
   | 'Need Approval'
   | 'Other';
 
-export type CasePriority = 'Low' | 'Medium' | 'High' | 'Emergency';
+export type CasePriority = 'Low' | 'Medium' | 'High' | 'Emergency' | 'Normal';
 
 export type UserRole = 'Service Engineer' | 'Service Manager' | 'Admin';
 
@@ -117,6 +117,7 @@ export interface Asset {
   customerLocation?: string;
   sector?: CustomerSector; // Government or Private
   roomNumber?: string;
+  roomWard?: string;
   department: Department;
   assetNumber?: string;
   poNumber?: string;
@@ -141,6 +142,7 @@ export interface Asset {
   partsApplicable?: { id: string; partName: string; partSerialNumber: string }[];
   status?: 'Active' | 'Under Maintenance' | 'Decommissioned';
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SparePartItem {
@@ -193,14 +195,16 @@ export interface ServiceCase {
   issueDescription: string;
   remarks?: string;
   status: CaseStatus;
-  pendingReason?: PendingReason;
+  pendingReason?: PendingReason | '';
   sparePartsUsed?: UsedSparePart[];
   invoiceRequired?: 'Yes' | 'No';
   invoiceNumber?: string;
+  invoiceFileUrl?: string;
   serviceReportNumber?: string;
   serviceReportMethod?: 'Manual Upload' | 'Digital Report' | 'Attached Document';
   serviceReportAttachment?: string;
   serviceReportDriveLink?: string;
+  attachmentUrl?: string;
   attachments?: AttachmentItem[];
   customerSignatoryName?: string;
   customerSignature?: string;

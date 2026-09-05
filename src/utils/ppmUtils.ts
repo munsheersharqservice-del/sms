@@ -164,15 +164,17 @@ export function filterPpmAssets(
 
     const analysis = analyzePpmStatus(asset.nextPpmDate);
 
-    // 2. Status filter
-    if (statusFilter === 'DUE_THIS_MONTH' && !analysis.isDueThisMonth) {
-      return false;
-    }
-    if (statusFilter === 'OVERDUE' && !analysis.isOverdue) {
-      return false;
-    }
-    if (statusFilter === 'UPCOMING' && !analysis.isUpcoming) {
-      return false;
+    // 2. Status filter (only applied when not filtering by a specific month)
+    if (!monthFilter || monthFilter === 'ALL') {
+      if (statusFilter === 'DUE_THIS_MONTH' && !analysis.isDueThisMonth) {
+        return false;
+      }
+      if (statusFilter === 'OVERDUE' && !analysis.isOverdue) {
+        return false;
+      }
+      if (statusFilter === 'UPCOMING' && !analysis.isUpcoming) {
+        return false;
+      }
     }
     if (statusFilter === 'WITH_PPM' && !hasPpm) {
       return false;

@@ -150,8 +150,10 @@ export const INITIAL_USERS: User[] = [
   },
 ];
 
-// Clean Real Slate: 0 Mock / 0 Test Customers
-export const INITIAL_CUSTOMERS: Customer[] = [];
+import { PERSISTENT_MASTER_ASSETS, PERSISTENT_MASTER_CASES, PERSISTENT_MASTER_DONE_WORK, PERSISTENT_MASTER_CUSTOMERS } from './persistentMasterData';
+
+// Clean Real Slate: Master Persistent Customers
+export const INITIAL_CUSTOMERS: Customer[] = PERSISTENT_MASTER_CUSTOMERS;
 
 // Clean Real Slate: 0 Mock Manufacturers / Models (Managed dynamically or via Google Sheet)
 export const INITIAL_MANUFACTURERS_MODELS: ManufacturerModel[] = [];
@@ -161,11 +163,11 @@ export const INITIAL_SPARE_PARTS: SparePartItem[] = [];
 
 export const INITIAL_SOFTWARE_LICENSES: SoftwareLicense[] = [];
 
-export const INITIAL_ASSETS: Asset[] = [];
+export const INITIAL_ASSETS: Asset[] = PERSISTENT_MASTER_ASSETS;
 
-export const INITIAL_CASES: ServiceCase[] = [];
+export const INITIAL_CASES: ServiceCase[] = PERSISTENT_MASTER_CASES;
 
-export const INITIAL_DONE_WORK: DoneWorkLog[] = [];
+export const INITIAL_DONE_WORK: DoneWorkLog[] = PERSISTENT_MASTER_DONE_WORK;
 
 export const INITIAL_REQUESTS: RequestItem[] = [];
 

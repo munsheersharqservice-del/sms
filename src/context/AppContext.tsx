@@ -755,10 +755,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('sharq_v3_assets');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const map = new Map<string, Asset>();
+          INITIAL_ASSETS.forEach((a) => map.set((a.serialNumber || '').trim().toUpperCase(), a));
+          parsed.forEach((a: Asset) => {
+            const s = (a.serialNumber || '').trim().toUpperCase();
+            const init = map.get(s);
+            const nextPpm = a.nextPpmDate || a.nextPpmDueDate || init?.nextPpmDate || init?.nextPpmDueDate || '';
+            map.set(s, {
+              ...init,
+              ...a,
+              nextPpmDate: nextPpm,
+              nextPpmDueDate: nextPpm,
+              ppmFrequency: (a.ppmFrequency && a.ppmFrequency !== 'None') ? a.ppmFrequency : (init?.ppmFrequency || 'None'),
+              ppmType: a.ppmType || init?.ppmType || '1st Maint',
+            });
+          });
+          return sanitizeAssetList(Array.from(map.values()));
+        }
       }
     } catch {}
-    return [];
+    return sanitizeAssetList(INITIAL_ASSETS);
   });
 
   // 7. Service Cases (Single Source of Truth: Live Database / Excel)
@@ -767,10 +784,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('sharq_v3_cases');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const map = new Map<string, ServiceCase>();
+          INITIAL_CASES.forEach((c) => map.set((c.ticketNumber || c.caseNumber || c.id || '').trim().toUpperCase(), c));
+          parsed.forEach((c: ServiceCase) => {
+            const k = (c.ticketNumber || c.caseNumber || c.id || '').trim().toUpperCase();
+            const init = map.get(k);
+            map.set(k, { ...init, ...c });
+          });
+          return sanitizeCaseList(Array.from(map.values()));
+        }
       }
     } catch {}
-    return [];
+    return sanitizeCaseList(INITIAL_CASES);
   });
 
   // 8. Done Work Logs (Single Source of Truth: Live Database / Excel)
@@ -779,10 +805,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem('sharq_v3_done_work');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const map = new Map<string, DoneWorkLog>();
+          INITIAL_DONE_WORK.forEach((dw) => map.set((dw.ticketNumber || dw.caseNumber || dw.id || '').trim().toUpperCase(), dw));
+          parsed.forEach((dw: DoneWorkLog) => {
+            const k = (dw.ticketNumber || dw.caseNumber || dw.id || '').trim().toUpperCase();
+            const init = map.get(k);
+            map.set(k, { ...init, ...dw });
+          });
+          return Array.from(map.values());
+        }
       }
     } catch {}
-    return [];
+    return INITIAL_DONE_WORK;
   });
 
   // Keep local caches in sync with memory
@@ -2311,30 +2346,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (Array.isArray(data.assets)) {
           const remoteAssets = sanitizeAssetList(data.assets);
           setAssets((prevAssets) => {
-            // Retain any locally registered assets that are not yet reflected in remote
-            const pendingLocals = prevAssets.filter((la) => {
+            // Retain any locally registered or master persistent assets that are not yet reflected in remote
+            const allLocalCandidates = [...INITIAL_ASSETS, ...prevAssets];
+            const seenSerials = new Set<string>();
+            const pendingLocals: Asset[] = [];
+            for (const la of allLocalCandidates) {
               const serialKey = (la.serialNumber || '').trim().toUpperCase();
+              if (serialKey && seenSerials.has(serialKey)) continue;
+              if (serialKey) seenSerials.add(serialKey);
               const inRemote = remoteAssets.some((ra) => 
                 (serialKey && (ra.serialNumber || '').trim().toUpperCase() === serialKey) ||
                 (ra.id && ra.id === la.id)
               );
-              return !inRemote;
-            });
-            // Merge remote assets, preserving local PPM schedule edits if set
+              if (!inRemote) {
+                pendingLocals.push(la);
+              }
+            }
+            // Merge remote assets, preserving local PPM schedule edits and master PPM dates if set
             const mergedRemote = remoteAssets.map((ra) => {
               const serialKey = (ra.serialNumber || '').trim().toUpperCase();
               const matchedLocal = prevAssets.find(
                 (la) =>
                   (serialKey && (la.serialNumber || '').trim().toUpperCase() === serialKey) ||
                   (la.id && la.id === ra.id)
+              ) || INITIAL_ASSETS.find(
+                (ia) =>
+                  (serialKey && (ia.serialNumber || '').trim().toUpperCase() === serialKey) ||
+                  (ia.id && ia.id === ra.id)
               );
               if (matchedLocal) {
+                const finalNextPpm = matchedLocal.nextPpmDate || (matchedLocal as any).nextPpmDueDate || ra.nextPpmDate || (ra as any).nextPpmDueDate || '';
                 return {
                   ...ra,
                   ppmFrequency: (matchedLocal.ppmFrequency && matchedLocal.ppmFrequency !== 'None') ? matchedLocal.ppmFrequency : ra.ppmFrequency,
                   ppmType: matchedLocal.ppmType || ra.ppmType,
                   lastPpmDate: matchedLocal.lastPpmDate || ra.lastPpmDate,
-                  nextPpmDate: matchedLocal.nextPpmDate || ra.nextPpmDate,
+                  nextPpmDate: finalNextPpm,
+                  nextPpmDueDate: finalNextPpm,
+                  roomWard: matchedLocal.roomWard || ra.roomWard,
                 };
               }
               return ra;
