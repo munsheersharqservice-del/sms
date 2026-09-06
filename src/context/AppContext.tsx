@@ -225,6 +225,7 @@ interface AppContextType {
   refreshFromGoogleSheets: (notify?: boolean, targetSpreadsheetId?: string) => Promise<void>;
   refreshSoftwareLicensesFromExcel: (notify?: boolean) => Promise<void>;
   clearAllData: () => void;
+  clearAllCases: () => void;
   resetToCleanRealMode: () => void;
   resetDatabase: () => void;
 }
@@ -784,42 +785,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return sanitizeAssetList(INITIAL_ASSETS);
   });
 
-  // 7. Service Cases (Single Source of Truth: Live Database / Excel)
+  // 7. Service Cases (Single Source of Truth: Live Database / Excel - Clean state starting at #1000)
   const [cases, setCases] = useState<ServiceCase[]>(() => {
     try {
+      const isPublishV1000 = localStorage.getItem('sharq_publish_v1000');
+      if (!isPublishV1000) {
+        localStorage.removeItem('sharq_v3_cases');
+        localStorage.removeItem('sharq_v3_done_work');
+        localStorage.removeItem('sharq_closed_tickets');
+        localStorage.setItem('sharq_publish_v1000', 'true');
+        return [];
+      }
       const saved = localStorage.getItem('sharq_v3_cases');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const map = new Map<string, ServiceCase>();
-          INITIAL_CASES.forEach((c) => map.set((c.ticketNumber || c.caseNumber || c.id || '').trim().toUpperCase(), c));
-          parsed.forEach((c: ServiceCase) => {
-            const k = (c.ticketNumber || c.caseNumber || c.id || '').trim().toUpperCase();
-            const init = map.get(k);
-            map.set(k, { ...init, ...c });
-          });
-          return sanitizeCaseList(Array.from(map.values()));
+        if (Array.isArray(parsed)) {
+          return sanitizeCaseList(parsed);
         }
       }
     } catch {}
     return sanitizeCaseList(INITIAL_CASES);
   });
 
-  // 8. Done Work Logs (Single Source of Truth: Live Database / Excel)
+  // 8. Done Work Logs (Single Source of Truth: Live Database / Excel - Clean state)
   const [doneWorkLogs, setDoneWorkLogs] = useState<DoneWorkLog[]>(() => {
     try {
+      const isPublishV1000 = localStorage.getItem('sharq_publish_v1000');
+      if (!isPublishV1000) {
+        return [];
+      }
       const saved = localStorage.getItem('sharq_v3_done_work');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const map = new Map<string, DoneWorkLog>();
-          INITIAL_DONE_WORK.forEach((dw) => map.set((dw.ticketNumber || dw.caseNumber || dw.id || '').trim().toUpperCase(), dw));
-          parsed.forEach((dw: DoneWorkLog) => {
-            const k = (dw.ticketNumber || dw.caseNumber || dw.id || '').trim().toUpperCase();
-            const init = map.get(k);
-            map.set(k, { ...init, ...dw });
-          });
-          return Array.from(map.values());
+        if (Array.isArray(parsed)) {
+          return parsed;
         }
       }
     } catch {}
@@ -828,19 +827,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Keep local caches in sync with memory
   useEffect(() => {
-    if (cases && cases.length > 0) {
-      try {
-        localStorage.setItem('sharq_v3_cases', JSON.stringify(cases));
-      } catch {}
-    }
+    try {
+      localStorage.setItem('sharq_v3_cases', JSON.stringify(cases || []));
+    } catch {}
   }, [cases]);
 
   useEffect(() => {
-    if (doneWorkLogs && doneWorkLogs.length > 0) {
-      try {
-        localStorage.setItem('sharq_v3_done_work', JSON.stringify(doneWorkLogs));
-      } catch {}
-    }
+    try {
+      localStorage.setItem('sharq_v3_done_work', JSON.stringify(doneWorkLogs || []));
+    } catch {}
   }, [doneWorkLogs]);
 
   useEffect(() => {
@@ -999,6 +994,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSoftwareLicenses([]);
     setSpareParts([]);
     setSheetsSyncStatus('All data cleared. System is in Real Mode (Clean State).');
+    setTimeout(() => setSheetsSyncStatus(null), 4000);
+  };
+
+  const clearAllCases = () => {
+    localStorage.removeItem('sharq_v3_cases');
+    localStorage.removeItem('sharq_v3_done_work');
+    localStorage.removeItem('sharq_closed_tickets');
+    setCases([]);
+    setDoneWorkLogs([]);
+    setSheetsSyncStatus('All service cases and completed work cleared. Ticket sequence starts at #1000.');
     setTimeout(() => setSheetsSyncStatus(null), 4000);
   };
 
@@ -1711,16 +1716,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       caseNumber?: string;
     }
   ): ServiceCase => {
-    // Determine sequential ticket number or use manual custom number
+    // Determine sequential ticket number or use manual custom number (Starts from 1000)
     let ticketNumber = (caseData.ticketNumber || caseData.caseNumber || '').trim().toUpperCase();
 
     if (!ticketNumber) {
-      const numericTickets = cases
-        .map((c) => parseInt(c.ticketNumber, 10))
-        .filter((n) => !isNaN(n) && n >= 202600);
+      const allNumbers = [
+        ...cases.map((c) => parseInt(c.ticketNumber || c.caseNumber || '', 10)),
+        ...doneWorkLogs.map((dw) => parseInt(dw.ticketNumber || dw.caseNumber || '', 10)),
+      ].filter((n) => !isNaN(n) && n >= 1000);
 
       const nextTicketNum =
-        numericTickets.length > 0 ? Math.max(...numericTickets) + 1 : 202601;
+        allNumbers.length > 0 ? Math.max(...allNumbers) + 1 : 1000;
 
       ticketNumber = nextTicketNum.toString();
     }
@@ -2956,6 +2962,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshFromGoogleSheets,
         refreshSoftwareLicensesFromExcel,
         clearAllData,
+        clearAllCases,
         resetToCleanRealMode,
         resetDatabase: resetToCleanRealMode,
       }}

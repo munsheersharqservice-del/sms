@@ -14,13 +14,14 @@ import {
   Paperclip,
   ShieldCheck,
   Filter,
+  FileText,
 } from 'lucide-react';
 import { DoneWorkLog, ReplacedPart, AttachmentItem } from '../../types';
 import { generateWorkReportPdf } from '../../utils/pdfGenerator';
 import { DriveAttachmentUploader } from '../Common/DriveAttachmentUploader';
 import { CaseAttachmentList } from '../Common/CaseAttachmentList';
 import { SharqDigitalReportModal } from '../Common/SharqDigitalReportModal';
-import { FileText } from 'lucide-react';
+import { buildCombinedDoneWorkAttachments } from '../../utils/attachmentHelper';
 
 export const DoneWorkView: React.FC = () => {
   const {
@@ -117,6 +118,16 @@ export const DoneWorkView: React.FC = () => {
     const c = selectableCases.find((item) => item.id === selectedCaseId) || cases.find((item) => item.id === selectedCaseId);
     if (!c) return;
 
+    const initialCaseAttachments = (c.attachments || []).map((att) => ({
+      ...att,
+      stage: att.stage || ('New Case' as const),
+    }));
+    const closeAttachments = attachments.map((att) => ({
+      ...att,
+      stage: 'Close Case' as const,
+    }));
+    const allLogAttachments = [...initialCaseAttachments, ...closeAttachments];
+
     addDoneWorkLog({
       caseId: c.id,
       ticketNumber: c.ticketNumber,
@@ -132,7 +143,7 @@ export const DoneWorkView: React.FC = () => {
       hoursSpent: parseFloat(hoursSpent) || 2,
       workDoneSummary,
       partsReplaced,
-      attachments,
+      attachments: allLogAttachments,
       customerSignatoryName: customerSignatoryName || 'Authorized Hospital Rep',
       customerSignature: 'Electronically Verified & Signed',
       status: 'Completed',
@@ -167,34 +178,37 @@ export const DoneWorkView: React.FC = () => {
   });
 
   return (
-    <div className="space-y-3.5 sm:space-y-4 pb-12">
+    <div className="space-y-4 max-w-7xl mx-auto pb-12">
       {/* 1. TOP HERO / BANNER */}
-      <div className="bg-slate-900 text-white rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-md border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+      <div className="bg-[#0B111D] dark:bg-[#0B111D] text-white rounded-2xl px-4 py-3.5 shadow-md border border-[#1B273D] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
-          <div className="p-2 sm:p-2.5 bg-emerald-500/20 text-[#4CAF50] rounded-xl border border-emerald-500/30 shrink-0">
+          <div className="p-2.5 bg-emerald-500/20 text-[#4CAF50] rounded-xl border border-emerald-500/30 shrink-0">
             <CheckCheck className="w-5 h-5" />
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xs sm:text-sm md:text-base font-bold tracking-tight text-white uppercase leading-tight">
+              <h1 className="text-sm sm:text-base font-black tracking-tight text-white uppercase leading-tight">
                 COMPLETED WORK LOGS & SERVICE REPORTS
               </h1>
-              <span className="bg-[#4CAF50] text-white text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs shrink-0 whitespace-nowrap">
+              <span className="bg-[#4CAF50] text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs shrink-0 whitespace-nowrap">
                 {baseLogs.length} Completed Logs
               </span>
             </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Inspection history, field job cards, attached service sheets & downloads
+            </p>
           </div>
         </div>
 
         {/* Action buttons */}
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => {
               setSelectedCaseForReport(null);
               setIsDigitalReportModalOpen(true);
             }}
-            className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
           >
             <FileText className="w-4 h-4" />
             <span>OFFICIAL DIGITAL REPORT</span>
@@ -207,7 +221,7 @@ export const DoneWorkView: React.FC = () => {
               }
               setIsModalOpen(true);
             }}
-            className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-[#F26522] hover:bg-[#d95417] text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
+            className="px-3.5 py-2 bg-[#F26522] hover:bg-[#d95417] text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>LOG FINISHED WORK</span>
@@ -216,29 +230,28 @@ export const DoneWorkView: React.FC = () => {
       </div>
 
       {/* FILTER & SEARCH SUB-BAR */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 sm:p-3.5 shadow-2xs space-y-2.5 transition-colors">
-        {/* Filter and Search Bar with Date Range */}
-        <div className="space-y-2.5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+      <div className="bg-white dark:bg-[#0E1626] rounded-xl border border-slate-200 dark:border-[#1B273D] p-3.5 shadow-2xs space-y-3 transition-colors">
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative w-full max-w-md">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
                 value={filterQuery}
                 onChange={(e) => setFilterQuery(e.target.value)}
                 placeholder="Search Ticket, Customer, S/N, Engineer..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#F26522] font-medium"
+                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 dark:border-[#1E293B] rounded-lg bg-slate-50 dark:bg-[#10192B] text-slate-800 dark:text-[#F8FAFC] placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-[#F26522] font-medium transition-colors"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2.5">
               {/* Status Filter */}
               <div className="flex items-center space-x-1.5">
-                <span className="text-xs text-slate-500 font-bold">Status:</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-bold">Status:</span>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-2 py-1 text-xs border border-slate-300 rounded-lg bg-slate-50 text-slate-800 font-bold focus:outline-hidden focus:ring-2 focus:ring-[#F26522]"
+                  className="px-2.5 py-1.5 text-xs border border-slate-300 dark:border-[#1E293B] rounded-lg bg-slate-50 dark:bg-[#10192B] text-slate-800 dark:text-[#F8FAFC] font-bold focus:outline-hidden focus:ring-2 focus:ring-[#F26522] transition-colors"
                 >
                   <option value="ALL">All Statuses</option>
                   <option value="Done">Done (Completed)</option>
@@ -252,11 +265,11 @@ export const DoneWorkView: React.FC = () => {
               {/* Admin Engineer Filter */}
               {isAdmin && (
                 <div className="flex items-center space-x-1.5">
-                  <span className="text-xs text-slate-500 font-bold shrink-0">Engineer:</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-bold shrink-0">Engineer:</span>
                   <select
                     value={adminEngineerFilter}
                     onChange={(e) => setAdminEngineerFilter(e.target.value)}
-                    className="px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-slate-50 text-slate-800 font-bold focus:outline-hidden focus:ring-2 focus:ring-[#F26522]"
+                    className="px-2.5 py-1.5 text-xs border border-slate-300 dark:border-[#1E293B] rounded-lg bg-slate-50 dark:bg-[#10192B] text-slate-800 dark:text-[#F8FAFC] font-bold focus:outline-hidden focus:ring-2 focus:ring-[#F26522] transition-colors"
                   >
                     <option value="ALL">⭐ ALL ENGINEERS ({doneWorkLogs.length})</option>
                     {users.map((u) => {
@@ -274,30 +287,30 @@ export const DoneWorkView: React.FC = () => {
           </div>
 
           {/* Date Range Search Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center space-x-1 text-slate-700 font-bold">
-                <Calendar className="w-3.5 h-3.5 text-teal-600" />
+          <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 bg-slate-50 dark:bg-[#0B111D] rounded-xl border border-slate-200 dark:border-[#1B273D] text-xs">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex items-center space-x-1 text-slate-700 dark:text-slate-200 font-bold">
+                <Calendar className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                 <span>Date Range:</span>
               </div>
 
               <div className="flex items-center space-x-1.5">
-                <span className="text-[11px] text-slate-500 font-semibold">From:</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">From:</span>
                 <input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="px-2 py-1 bg-white border border-slate-300 rounded text-xs font-mono text-slate-800 focus:ring-1 focus:ring-teal-500 outline-none"
+                  className="px-2.5 py-1 bg-white dark:bg-[#10192B] border border-slate-300 dark:border-[#1E293B] rounded-lg text-xs font-mono text-slate-800 dark:text-[#F8FAFC] focus:ring-1 focus:ring-teal-500 outline-none transition-colors"
                 />
               </div>
 
               <div className="flex items-center space-x-1.5">
-                <span className="text-[11px] text-slate-500 font-semibold">To:</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">To:</span>
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="px-2 py-1 bg-white border border-slate-300 rounded text-xs font-mono text-slate-800 focus:ring-1 focus:ring-teal-500 outline-none"
+                  className="px-2.5 py-1 bg-white dark:bg-[#10192B] border border-slate-300 dark:border-[#1E293B] rounded-lg text-xs font-mono text-slate-800 dark:text-[#F8FAFC] focus:ring-1 focus:ring-teal-500 outline-none transition-colors"
                 />
               </div>
 
@@ -308,7 +321,7 @@ export const DoneWorkView: React.FC = () => {
                     setStartDate('');
                     setEndDate('');
                   }}
-                  className="px-2 py-1 text-[11px] font-bold text-red-600 hover:bg-red-50 rounded border border-red-200 cursor-pointer"
+                  className="px-2.5 py-1 text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg border border-red-200 dark:border-red-900/50 cursor-pointer transition-colors"
                 >
                   Clear Date
                 </button>
@@ -316,13 +329,15 @@ export const DoneWorkView: React.FC = () => {
             </div>
 
             {/* Quick Date Presets */}
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] text-slate-400 uppercase font-bold mr-1">Presets:</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold mr-1">Presets:</span>
               <button
                 type="button"
                 onClick={() => handleDatePreset('ALL')}
-                className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors cursor-pointer ${
-                  !startDate && !endDate ? 'bg-teal-700 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                  !startDate && !endDate
+                    ? 'bg-teal-700 dark:bg-teal-600 text-white'
+                    : 'bg-white dark:bg-[#10192B] text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-[#1E293B] hover:bg-slate-100 dark:hover:bg-[#162238]'
                 }`}
               >
                 All
@@ -330,21 +345,21 @@ export const DoneWorkView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleDatePreset('TODAY')}
-                className="px-2 py-0.5 bg-white text-slate-600 hover:bg-slate-100 border border-slate-300 rounded text-[11px] font-bold cursor-pointer"
+                className="px-2.5 py-1 bg-white dark:bg-[#10192B] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#162238] border border-slate-300 dark:border-[#1E293B] rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
               >
                 Today
               </button>
               <button
                 type="button"
                 onClick={() => handleDatePreset('7DAYS')}
-                className="px-2 py-0.5 bg-white text-slate-600 hover:bg-slate-100 border border-slate-300 rounded text-[11px] font-bold cursor-pointer"
+                className="px-2.5 py-1 bg-white dark:bg-[#10192B] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#162238] border border-slate-300 dark:border-[#1E293B] rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
               >
                 Last 7 Days
               </button>
               <button
                 type="button"
                 onClick={() => handleDatePreset('THIS_MONTH')}
-                className="px-2 py-0.5 bg-white text-slate-600 hover:bg-slate-100 border border-slate-300 rounded text-[11px] font-bold cursor-pointer"
+                className="px-2.5 py-1 bg-white dark:bg-[#10192B] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#162238] border border-slate-300 dark:border-[#1E293B] rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
               >
                 This Month
               </button>
@@ -353,10 +368,10 @@ export const DoneWorkView: React.FC = () => {
         </div>
       </div>
 
-      {/* COMPLETED WORK LOG CARDS LIST WITH STATUS BACKGROUND COLORS */}
-      <div className="space-y-3.5">
+      {/* COMPLETED WORK LOG CARDS LIST */}
+      <div className="space-y-4">
         {filteredLogs.length === 0 ? (
-          <div className="p-12 text-center bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
+          <div className="p-12 text-center bg-white dark:bg-[#0E1626] rounded-2xl border border-slate-200 dark:border-[#1B273D] text-slate-500 dark:text-slate-400 text-xs shadow-xs">
             No service work logs found matching date / search filter.
           </div>
         ) : (
@@ -368,40 +383,40 @@ export const DoneWorkView: React.FC = () => {
             const isPending = rawStatus === 'pending' || rawStatus === 'on hold';
 
             const cardBgStyle = isDone
-              ? 'bg-emerald-50/70 border-emerald-300 hover:border-emerald-500'
+              ? 'bg-emerald-50/70 dark:bg-[#0E1626] border-emerald-300 dark:border-emerald-500/40 hover:border-emerald-500 dark:hover:border-emerald-400'
               : isRunning
-              ? 'bg-amber-50/70 border-amber-300 hover:border-amber-500'
+              ? 'bg-amber-50/70 dark:bg-[#0E1626] border-amber-300 dark:border-amber-500/40 hover:border-amber-500 dark:hover:border-amber-400'
               : isNew
-              ? 'bg-blue-50/70 border-blue-300 hover:border-blue-500'
+              ? 'bg-blue-50/70 dark:bg-[#0E1626] border-blue-300 dark:border-blue-500/40 hover:border-blue-500 dark:hover:border-blue-400'
               : isPending
-              ? 'bg-orange-50/70 border-orange-300 hover:border-orange-500'
-              : 'bg-white border-slate-200 hover:border-slate-400';
+              ? 'bg-orange-50/70 dark:bg-[#0E1626] border-orange-300 dark:border-orange-500/40 hover:border-orange-500 dark:hover:border-orange-400'
+              : 'bg-white dark:bg-[#0E1626] border-slate-200 dark:border-[#1B273D] hover:border-slate-400 dark:hover:border-slate-600';
 
             const badgeStyle = isDone
-              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+              ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-600/50'
               : isRunning
-              ? 'bg-amber-100 text-amber-900 border-amber-300'
+              ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-600/50'
               : isNew
-              ? 'bg-blue-100 text-blue-900 border-blue-300'
+              ? 'bg-blue-100 dark:bg-blue-950/80 text-blue-900 dark:text-blue-300 border-blue-300 dark:border-blue-600/50'
               : isPending
-              ? 'bg-orange-100 text-orange-900 border-orange-300'
-              : 'bg-slate-100 text-slate-800 border-slate-300';
+              ? 'bg-orange-100 dark:bg-orange-950/80 text-orange-900 dark:text-orange-300 border-orange-300 dark:border-orange-600/50'
+              : 'bg-slate-100 dark:bg-[#10192B] text-slate-800 dark:text-slate-300 border-slate-300 dark:border-[#1E293B]';
 
             return (
               <div
                 key={log.id}
-                className={`rounded-xl border shadow-xs p-4 sm:p-5 transition-all space-y-3 ${cardBgStyle}`}
+                className={`rounded-2xl border shadow-xs p-4 sm:p-5 transition-all space-y-3.5 ${cardBgStyle}`}
               >
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 dark:border-[#1B273D]/80 pb-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-extrabold text-sm font-mono text-slate-900 bg-white px-2.5 py-0.5 rounded border border-slate-300 shadow-2xs">
+                    <span className="font-extrabold text-sm font-mono text-slate-900 dark:text-[#F8FAFC] bg-white dark:bg-[#10192B] px-2.5 py-0.5 rounded-lg border border-slate-300 dark:border-[#1E293B] shadow-2xs">
                       #{log.ticketNumber || log.caseNumber}
                     </span>
                     {(() => {
                       const rawType = log.callType || log.workClassification || 'Service';
                       const cleanType = (rawType.startsWith('http') || rawType.includes('drive.google.com')) ? 'Service' : rawType;
                       return (
-                        <span className="bg-white/80 text-slate-800 text-xs font-bold px-2 py-0.5 rounded-md border border-slate-300">
+                        <span className="bg-white/80 dark:bg-[#10192B] text-slate-800 dark:text-slate-200 text-xs font-bold px-2.5 py-0.5 rounded-lg border border-slate-300 dark:border-[#1E293B]">
                           {cleanType}
                         </span>
                       );
@@ -410,7 +425,7 @@ export const DoneWorkView: React.FC = () => {
                       {log.status || 'Done'}
                     </span>
                     {log.serviceReportNumber && (
-                      <span className="text-[10px] font-mono font-bold bg-white text-teal-800 px-2 py-0.5 rounded border border-teal-200">
+                      <span className="text-[10px] font-mono font-bold bg-white dark:bg-[#10192B] text-teal-800 dark:text-teal-300 px-2.5 py-0.5 rounded-lg border border-teal-200 dark:border-teal-700/50">
                         SR: {log.serviceReportNumber}
                       </span>
                     )}
@@ -426,7 +441,7 @@ export const DoneWorkView: React.FC = () => {
                         setSelectedCaseForReport(matchedCase || null);
                         setIsDigitalReportModalOpen(true);
                       }}
-                      className="px-3 py-1.5 bg-white hover:bg-emerald-600 hover:text-white text-emerald-800 font-bold text-xs rounded-lg border border-emerald-300 transition-colors flex items-center space-x-1.5 cursor-pointer shadow-2xs"
+                      className="px-3 py-1.5 bg-white dark:bg-[#10192B] hover:bg-emerald-600 dark:hover:bg-emerald-600 text-emerald-800 dark:text-emerald-400 hover:text-white dark:hover:text-white font-bold text-xs rounded-lg border border-emerald-300 dark:border-emerald-700/60 transition-colors flex items-center space-x-1.5 cursor-pointer shadow-2xs"
                       title="View / Print Official Sharq Digital Report"
                     >
                       <FileText className="w-4 h-4" />
@@ -436,7 +451,7 @@ export const DoneWorkView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => generateWorkReportPdf(log)}
-                      className="px-3 py-1.5 bg-white hover:bg-[#F26522] hover:text-white text-[#F26522] font-bold text-xs rounded-lg border border-[#F26522]/40 transition-colors flex items-center space-x-1.5 cursor-pointer shadow-2xs"
+                      className="px-3 py-1.5 bg-white dark:bg-[#10192B] hover:bg-[#F26522] dark:hover:bg-[#F26522] text-[#F26522] hover:text-white dark:hover:text-white font-bold text-xs rounded-lg border border-[#F26522]/40 dark:border-[#F26522]/50 transition-colors flex items-center space-x-1.5 cursor-pointer shadow-2xs"
                     >
                       <FileDown className="w-4 h-4" />
                       <span>PDF</span>
@@ -444,53 +459,65 @@ export const DoneWorkView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-white/70 p-3 rounded-lg border border-slate-200/80">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-white/70 dark:bg-[#10192B] p-3 rounded-xl border border-slate-200/80 dark:border-[#1E293B] transition-colors">
                   <div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">CUSTOMER & DEPT</span>
-                    <p className="font-extrabold text-slate-900 text-xs">{log.customerName}</p>
-                    <p className="text-slate-600 text-[11px]">{log.department} Department</p>
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">CUSTOMER & DEPT</span>
+                    <p className="font-extrabold text-slate-900 dark:text-[#F8FAFC] text-xs mt-0.5">{log.customerName}</p>
+                    <p className="text-slate-600 dark:text-slate-400 text-[11px]">{log.department} Department</p>
                   </div>
 
                   <div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">EQUIPMENT & S/N</span>
-                    <p className="font-bold text-slate-800">{log.model}</p>
-                    <p className="font-mono text-teal-800 font-bold text-[11px]">S/N: {log.serialNumber}</p>
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">EQUIPMENT & S/N</span>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{log.model}</p>
+                    <p className="font-mono text-teal-800 dark:text-teal-400 font-bold text-[11px]">S/N: {log.serialNumber}</p>
                   </div>
 
                   <div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">ENGINEER & DATE</span>
-                    <p className="font-bold text-slate-900">{log.engineerName}</p>
-                    <p className="text-slate-600 text-[11px]">Date: <strong className="font-mono">{log.dateCompleted}</strong> ({log.hoursSpent}h)</p>
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ENGINEER & DATE</span>
+                    <p className="font-bold text-slate-900 dark:text-[#F8FAFC] mt-0.5">{log.engineerName}</p>
+                    <p className="text-slate-600 dark:text-slate-400 text-[11px]">Date: <strong className="font-mono text-slate-900 dark:text-slate-200">{log.dateCompleted}</strong> ({log.hoursSpent}h)</p>
                   </div>
                 </div>
 
-                <div className="bg-white p-3 rounded-lg border border-slate-200 text-xs text-slate-800 shadow-2xs">
-                  <span className="font-extrabold text-slate-900 uppercase text-[10px] block mb-0.5">Execution Summary: </span>
-                  <p className="text-slate-700 leading-relaxed font-medium">{log.workDoneSummary}</p>
+                <div className="bg-white dark:bg-[#10192B] p-3 rounded-xl border border-slate-200 dark:border-[#1E293B] text-xs text-slate-800 dark:text-slate-200 shadow-2xs transition-colors">
+                  <span className="font-extrabold text-slate-900 dark:text-[#F8FAFC] uppercase text-[10px] tracking-wider block mb-1">Execution Summary:</span>
+                  <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-medium">{log.workDoneSummary}</p>
                 </div>
 
-                {/* Attachments - Show / Hide In-App Only */}
-                {((log.attachments && log.attachments.length > 0) || log.serviceReportDriveLink) && (
-                  <div className="bg-white/80 p-2.5 rounded-lg border border-slate-200 shadow-2xs">
-                    <CaseAttachmentList
-                      attachments={log.attachments}
-                      legacyAttachmentUrl={log.serviceReportDriveLink}
-                      caseTicket={log.ticketNumber || log.caseNumber}
-                      customerName={log.customerName}
-                    />
-                  </div>
-                )}
+                {/* Attachments Gallery - Shows ALL attachments (both New Case & Close Case) without Drive folder link */}
+                {(() => {
+                  const matchedCase = cases.find(
+                    (c) =>
+                      (log.caseId && c.id === log.caseId) ||
+                      (log.ticketNumber && c.ticketNumber === log.ticketNumber) ||
+                      (log.caseNumber && c.ticketNumber === log.caseNumber)
+                  );
+                  const combinedAttachments = buildCombinedDoneWorkAttachments(log, matchedCase);
+
+                  if (combinedAttachments.length === 0) return null;
+
+                  return (
+                    <div className="bg-white/80 dark:bg-[#10192B]/80 p-2.5 rounded-xl border border-slate-200 dark:border-[#1E293B] shadow-2xs">
+                      <CaseAttachmentList
+                        attachments={combinedAttachments}
+                        caseTicket={log.ticketNumber || log.caseNumber}
+                        customerName={log.customerName}
+                        showDriveFolder={false}
+                      />
+                    </div>
+                  );
+                })()}
 
                 {log.partsReplaced && log.partsReplaced.length > 0 && (
-                  <div className="text-xs bg-emerald-100/60 p-2.5 rounded-lg border border-emerald-200 space-y-1">
-                    <span className="font-bold text-emerald-950 uppercase text-[10px]">Parts Replaced: </span>
+                  <div className="text-xs bg-emerald-100/60 dark:bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800/50 space-y-1">
+                    <span className="font-bold text-emerald-950 dark:text-emerald-300 uppercase text-[10px] tracking-wider">Parts Replaced:</span>
                     <div className="flex flex-wrap gap-2 pt-1">
                       {log.partsReplaced.map((p, idx) => (
                         <span
                           key={idx}
-                          className="bg-white border border-emerald-300 text-slate-900 px-2 py-0.5 rounded-md font-bold text-[11px] shadow-2xs"
+                          className="bg-white dark:bg-[#10192B] px-2 py-1 rounded-md text-slate-800 dark:text-slate-200 font-medium border border-emerald-300 dark:border-emerald-700/60"
                         >
-                          {p.partName} (Qty: {p.quantity}, S/N: {p.partSerial || 'N/A'})
+                          {p.partName} (Qty: {p.quantity}) {p.partSerial ? `- S/N: ${p.partSerial}` : ''}
                         </span>
                       ))}
                     </div>
@@ -504,30 +531,30 @@ export const DoneWorkView: React.FC = () => {
 
       {/* LOG FINISHED WORK MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
-              <h3 className="text-sm font-bold tracking-wider uppercase text-[#F26522]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-[#0E1626] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#1B273D] w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
+            <div className="p-4 bg-[#080C14] text-white flex justify-between items-center border-b border-[#1B273D]">
+              <h3 className="text-xs sm:text-sm font-black tracking-wider uppercase text-[#F26522]">
                 RECORD COMPLETED SERVICE WORK & JOB CARD
               </h3>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-xs text-slate-400 hover:text-white cursor-pointer"
+                className="text-slate-400 hover:text-white cursor-pointer p-1 rounded-lg hover:bg-[#162238] transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleFormSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleFormSubmit} className="p-5 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
                   SELECT SERVICE CASE <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={selectedCaseId}
                   onChange={(e) => setSelectedCaseId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#F26522] font-medium"
+                  className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 dark:border-[#1E293B] rounded-xl bg-slate-50 dark:bg-[#10192B] text-slate-800 dark:text-[#F8FAFC] focus:outline-hidden focus:ring-2 focus:ring-[#F26522] font-medium transition-colors"
                 >
                   {selectableCases.map((cs) => (
                     <option key={cs.id} value={cs.id}>
@@ -537,9 +564,9 @@ export const DoneWorkView: React.FC = () => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
                     LABOR HOURS SPENT
                   </label>
                   <input
@@ -547,12 +574,12 @@ export const DoneWorkView: React.FC = () => {
                     step="0.5"
                     value={hoursSpent}
                     onChange={(e) => setHoursSpent(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#F26522]"
+                    className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 dark:border-[#1E293B] rounded-xl bg-slate-50 dark:bg-[#10192B] text-slate-800 dark:text-[#F8FAFC] focus:outline-hidden focus:ring-2 focus:ring-[#F26522] transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
                     CUSTOMER SIGNATORY NAME
                   </label>
                   <input
@@ -560,13 +587,13 @@ export const DoneWorkView: React.FC = () => {
                     value={customerSignatoryName}
                     onChange={(e) => setCustomerSignatoryName(e.target.value)}
                     placeholder="e.g. Dr. Fatima Al-Thani"
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#F26522]"
+                    className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 dark:border-[#1E293B] rounded-xl bg-slate-50 dark:bg-[#10192B] text-slate-800 dark:text-[#F8FAFC] focus:outline-hidden focus:ring-2 focus:ring-[#F26522] transition-colors"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
                   SUMMARY OF WORK PERFORMED <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -574,13 +601,13 @@ export const DoneWorkView: React.FC = () => {
                   value={workDoneSummary}
                   onChange={(e) => setWorkDoneSummary(e.target.value)}
                   placeholder="Detail test results, replaced components, calibration parameters, and operational clearance..."
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#F26522]"
+                  className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 dark:border-[#1E293B] rounded-xl bg-slate-50 dark:bg-[#10192B] text-slate-800 dark:text-[#F8FAFC] focus:outline-hidden focus:ring-2 focus:ring-[#F26522] transition-colors"
                 />
               </div>
 
               {/* REPLACED PARTS ADDER */}
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-                <label className="block text-xs font-bold text-slate-700 uppercase">
+              <div className="p-3.5 bg-slate-50 dark:bg-[#10192B] rounded-xl border border-slate-200 dark:border-[#1E293B] space-y-2.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">
                   PARTS & CONSUMABLES REPLACED
                 </label>
 
@@ -590,26 +617,26 @@ export const DoneWorkView: React.FC = () => {
                     value={partName}
                     onChange={(e) => setPartName(e.target.value)}
                     placeholder="Part Name"
-                    className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-white"
+                    className="px-2.5 py-1.5 text-xs border border-slate-300 dark:border-[#1E293B] rounded-lg bg-white dark:bg-[#0E1626] text-slate-800 dark:text-[#F8FAFC]"
                   />
                   <input
                     type="text"
                     value={partSerial}
                     onChange={(e) => setPartSerial(e.target.value)}
                     placeholder="Part S/N"
-                    className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-md font-mono bg-white"
+                    className="px-2.5 py-1.5 text-xs border border-slate-300 dark:border-[#1E293B] rounded-lg font-mono bg-white dark:bg-[#0E1626] text-slate-800 dark:text-[#F8FAFC]"
                   />
                   <div className="flex space-x-1">
                     <input
                       type="number"
                       value={partQty}
                       onChange={(e) => setPartQty(e.target.value)}
-                      className="w-16 px-2 py-1.5 text-xs border border-slate-300 rounded-md bg-white"
+                      className="w-16 px-2 py-1.5 text-xs border border-slate-300 dark:border-[#1E293B] rounded-lg bg-white dark:bg-[#0E1626] text-slate-800 dark:text-[#F8FAFC]"
                     />
                     <button
                       type="button"
                       onClick={handleAddReplacedPart}
-                      className="flex-1 px-3 py-1.5 bg-[#39B54A] hover:bg-emerald-600 text-white font-bold text-xs rounded-md cursor-pointer"
+                      className="flex-1 px-3 py-1.5 bg-[#39B54A] hover:bg-emerald-600 text-white font-bold text-xs rounded-lg cursor-pointer transition-colors"
                     >
                       + Add
                     </button>
@@ -617,11 +644,13 @@ export const DoneWorkView: React.FC = () => {
                 </div>
 
                 {partsReplaced.length > 0 && (
-                  <div className="space-y-1 pt-2">
+                  <div className="space-y-1.5 pt-2">
                     {partsReplaced.map((p, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-xs bg-white p-1.5 rounded-md border border-slate-200">
-                        <span>{p.partName} (Qty: {p.quantity}) - S/N: {p.partSerial || 'N/A'}</span>
-                        <button type="button" onClick={() => handleRemoveReplacedPart(idx)} className="text-red-500 text-xs cursor-pointer">
+                      <div key={idx} className="flex justify-between items-center text-xs bg-white dark:bg-[#0E1626] p-2 rounded-lg border border-slate-200 dark:border-[#1E293B]">
+                        <span className="text-slate-800 dark:text-slate-200 font-medium">
+                          {p.partName} (Qty: {p.quantity}) - S/N: {p.partSerial || 'N/A'}
+                        </span>
+                        <button type="button" onClick={() => handleRemoveReplacedPart(idx)} className="text-red-500 hover:text-red-400 text-xs font-bold cursor-pointer">
                           Remove
                         </button>
                       </div>
@@ -631,7 +660,7 @@ export const DoneWorkView: React.FC = () => {
               </div>
 
               {/* ATTACHMENT UPLOADER FOR COMPLETED JOB CARD */}
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="p-3.5 bg-slate-50 dark:bg-[#10192B] rounded-xl border border-slate-200 dark:border-[#1E293B]">
                 {(() => {
                   const selCase = selectableCases.find((c) => c.id === selectedCaseId);
                   const isPpm = selCase?.callType === 'PPM' || selCase?.workClassification === 'PPM';
@@ -650,24 +679,24 @@ export const DoneWorkView: React.FC = () => {
                       label={
                         isPpm
                           ? `Upload PPM Hardcopy (Drive Filename: ${customPpmName || 'SERIAL NUMBER(ASSET NUMBER)-PPM'})`
-                          : "Upload Signed Field Sheet / Equipment Photos (Google Drive)"
+                          : "Upload Signed Field Sheet / Equipment Photos"
                       }
                     />
                   );
                 })()}
               </div>
 
-              <div className="flex justify-end space-x-2 pt-2">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-[#1E293B]">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg cursor-pointer"
+                  className="px-4 py-2 border border-slate-300 dark:border-[#1E293B] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#162238] text-xs font-semibold rounded-xl cursor-pointer transition-colors"
                 >
                   CANCEL
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#F26522] hover:bg-[#d95417] text-white text-xs font-bold rounded-lg shadow-sm cursor-pointer"
+                  className="px-5 py-2 bg-[#F26522] hover:bg-[#d95417] text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer transition-colors"
                 >
                   SUBMIT & RESOLVE CASE
                 </button>

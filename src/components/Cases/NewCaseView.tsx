@@ -38,6 +38,7 @@ export const NewCaseView: React.FC = () => {
     customers,
     addCase,
     cases,
+    doneWorkLogs,
     isAdmin,
     setActiveTab,
     selectedAssetForCase,
@@ -48,12 +49,13 @@ export const NewCaseView: React.FC = () => {
     connectGoogle,
   } = useApp();
 
-  // Next Auto Ticket Number Calculation
-  const numericTickets = cases
-    .map((c) => parseInt(c.ticketNumber, 10))
-    .filter((n) => !isNaN(n) && n >= 202600);
+  // Next Auto Ticket Number Calculation (Starts from 1000 for clean production launch)
+  const numericTickets = [
+    ...cases.map((c) => parseInt(c.ticketNumber || c.caseNumber || '', 10)),
+    ...(doneWorkLogs || []).map((dw) => parseInt(dw.ticketNumber || dw.caseNumber || '', 10)),
+  ].filter((n) => !isNaN(n) && n >= 1000);
   const nextAutoTicketNumber =
-    numericTickets.length > 0 ? Math.max(...numericTickets) + 1 : 202601;
+    numericTickets.length > 0 ? Math.max(...numericTickets) + 1 : 1000;
 
   // Case Number Mode: Auto vs Manual
   const [caseNumberMode, setCaseNumberMode] = useState<'AUTO' | 'MANUAL'>('AUTO');

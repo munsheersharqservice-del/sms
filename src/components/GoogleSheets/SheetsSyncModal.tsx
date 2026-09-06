@@ -1036,7 +1036,7 @@ function doPost(e) { ... }`}
                 rows={6}
                 placeholder={
                   pasteType === 'cases'
-                    ? '202601\tHAMAD MEDICAL CORPORATION\tSN-99881\tCARESTREAM CS8100\tCalibration required\tENGINEER 1\n202602\tAL AHLI HOSPITAL\tSN-44321\tDENTAL UNIT ADEC 500\tSuction motor check\tENGINEER 2'
+                    ? '1000\tHAMAD MEDICAL CORPORATION\tSN-99881\tCARESTREAM CS8100\tCalibration required\tENGINEER 1\n1001\tAL AHLI HOSPITAL\tSN-44321\tDENTAL UNIT ADEC 500\tSuction motor check\tENGINEER 2'
                     : 'SN-99881\tCARESTREAM CS8100\tCARESTREAM\tHAMAD MEDICAL CORPORATION\nSN-44321\tDENTAL UNIT ADEC 500\tADEC\tAL AHLI HOSPITAL'
                 }
                 className="w-full p-3 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"

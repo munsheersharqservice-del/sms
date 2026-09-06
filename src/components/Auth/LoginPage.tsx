@@ -114,14 +114,6 @@ export const LoginPage: React.FC = () => {
     }, 200);
   };
 
-  // Quick select an existing engineer for fast testing / access
-  const handleQuickSelectEngineer = (userName: string, email: string) => {
-    setLoginIdentifier(email || userName);
-    setLoginPassword('123');
-    setErrorMsg('');
-    setSuccessMsg(`Selected Eng. ${userName}`);
-  };
-
   // Step 1: Send OTP to Engineer Email for Sign Up
   const handleInitiateSignupOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -298,7 +290,7 @@ export const LoginPage: React.FC = () => {
     }
 
     if (passcode !== '2277') {
-      setErrorMsg('Invalid Admin Passcode (Must be 2277).');
+      setErrorMsg('Invalid Admin Passcode.');
       return;
     }
 
@@ -315,9 +307,6 @@ export const LoginPage: React.FC = () => {
       }
     }, 250);
   };
-
-  // Non-admin engineers for quick-select demo pills
-  const engineerList = users.filter((u) => u.role !== 'Admin').slice(0, 6);
 
   return (
     <div
@@ -670,35 +659,6 @@ export const LoginPage: React.FC = () => {
               {/* TAB 1: LOG IN FORM */}
               {authMode === 'login' && (
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  {/* Quick Select Engineer Selector for fast access */}
-                  <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        ⚡ Quick Select Engineer:
-                      </span>
-                      <span className="text-[9px] text-slate-500 font-mono">Tap name to fill</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {engineerList.map((eng) => (
-                        <button
-                          key={eng.id}
-                          type="button"
-                          onClick={() => handleQuickSelectEngineer(eng.name, eng.email)}
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-all cursor-pointer border ${
-                            loginIdentifier.toLowerCase() === eng.email.toLowerCase() ||
-                            loginIdentifier.toUpperCase() === eng.name.toUpperCase()
-                              ? 'bg-sky-500 text-white border-sky-400'
-                              : isDarkMode
-                              ? 'bg-slate-800 text-slate-300 border-slate-700 hover:border-sky-500 hover:text-white'
-                              : 'bg-white text-slate-700 border-slate-200 hover:border-[#1D3557]'
-                          }`}
-                        >
-                          {eng.name.replace('ENG. ', '')}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   <div>
                     <label className={`block text-xs font-bold mb-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                       Engineer Username or Email
@@ -1156,7 +1116,7 @@ export const LoginPage: React.FC = () => {
 
                 <div>
                   <label className={`block text-xs font-bold mb-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                    Admin Passcode (System: 2277)
+                    Admin Passcode
                   </label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1194,7 +1154,7 @@ export const LoginPage: React.FC = () => {
                     : 'bg-slate-50 border-slate-200 text-slate-600'
                 }`}>
                   <KeyRound className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>Admin passcode (2277) unlocks Sheets Live Sync, Master Clear & Configuration.</span>
+                  <span>Admin passcode unlocks Sheets Live Sync, Master Clear & Configuration.</span>
                 </div>
 
                 <button

@@ -10,11 +10,18 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
-  Maximize2,
   File,
+  AlertCircle,
 } from 'lucide-react';
 import { AttachmentItem } from '../../types';
-import { useApp } from '../../context/AppContext';
+import {
+  isAttachmentImage,
+  getAttachmentDisplayUrl,
+  getAttachmentFallbackUrl,
+  getAttachmentDownloadUrl,
+  downloadSingleAttachment,
+  extractGoogleDriveFileId,
+} from '../../utils/attachmentHelper';
 
 interface AttachmentViewerModalProps {
   isOpen: boolean;
@@ -33,34 +40,41 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
   title = 'Case Attachment',
   caseTicket,
 }) => {
-  const { isAdmin } = useApp();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [imageFailed, setImageFailed] = useState(false);
+  const [useFallbackUrl, setUseFallbackUrl] = useState(false);
 
   if (!isOpen || !attachments || attachments.length === 0) return null;
 
   const currentAttachment = attachments[currentIndex] || attachments[0];
-  const isImage =
-    currentAttachment?.mimeType?.startsWith('image/') ||
-    currentAttachment?.name?.match(/\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i) ||
-    (currentAttachment?.dataUrl && currentAttachment.dataUrl.startsWith('data:image/'));
-
+  const isImage = isAttachmentImage(currentAttachment);
   const isPdf =
+    currentAttachment?.type === 'application/pdf' ||
     currentAttachment?.mimeType === 'application/pdf' ||
-    currentAttachment?.name?.endsWith('.pdf') ||
-    (currentAttachment?.dataUrl && currentAttachment.dataUrl.startsWith('data:application/pdf'));
+    currentAttachment?.name?.toLowerCase().endsWith('.pdf') ||
+    Boolean(currentAttachment?.dataUrl && currentAttachment.dataUrl.startsWith('data:application/pdf'));
+
+  const fileId = currentAttachment.driveFileId || extractGoogleDriveFileId(currentAttachment.driveLink);
+  const primaryDisplayUrl = getAttachmentDisplayUrl(currentAttachment);
+  const fallbackUrl = getAttachmentFallbackUrl(currentAttachment);
+  const activeImageSrc = useFallbackUrl && fallbackUrl ? fallbackUrl : primaryDisplayUrl;
 
   const handleNext = () => {
     setCurrentIndex((prev) => (prev + 1) % attachments.length);
     setZoom(1);
     setRotation(0);
+    setImageFailed(false);
+    setUseFallbackUrl(false);
   };
 
   const handlePrev = () => {
     setCurrentIndex((prev) => (prev - 1 + attachments.length) % attachments.length);
     setZoom(1);
     setRotation(0);
+    setImageFailed(false);
+    setUseFallbackUrl(false);
   };
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.25, 3));
@@ -69,31 +83,36 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
 
   const handleDownload = () => {
     if (!currentAttachment) return;
-    const downloadUrl = currentAttachment.dataUrl || currentAttachment.driveLink;
-    if (!downloadUrl) return;
-
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = currentAttachment.name || `Attachment-${caseTicket || 'Case'}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const name = currentAttachment.name || `Attachment-${caseTicket || 'Document'}`;
+    downloadSingleAttachment(currentAttachment, name);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-slate-900 rounded-2xl shadow-2xl border border-slate-700 flex flex-col overflow-hidden text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-4xl max-h-[92vh] bg-[#0E1626] rounded-2xl shadow-2xl border border-[#1B273D] flex flex-col overflow-hidden text-white">
+        
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-slate-950 border-b border-slate-800">
+        <div className="flex items-center justify-between px-5 py-3.5 bg-[#080C14] border-b border-[#1B273D]">
           <div className="flex items-center space-x-3 min-w-0">
-            <div className="p-2 bg-slate-800 rounded-lg text-emerald-400 shrink-0">
+            <div className="p-2 bg-[#10192B] border border-[#1E293B] rounded-lg text-emerald-400 shrink-0">
               {isImage ? <ImageIcon className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
             </div>
             <div className="min-w-0">
               <div className="flex items-center space-x-2">
                 <h3 className="text-sm font-black text-white truncate">
-                  {currentAttachment.name || 'Attachment'}
+                  {currentAttachment.name || 'Attachment File'}
                 </h3>
+                {currentAttachment.stage && (
+                  <span
+                    className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                      currentAttachment.stage === 'New Case'
+                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    }`}
+                  >
+                    {currentAttachment.stage}
+                  </span>
+                )}
                 {caseTicket && (
                   <span className="text-[10px] font-mono font-bold bg-teal-500/20 text-teal-300 border border-teal-500/40 px-2 py-0.2 rounded-full">
                     #{caseTicket}
@@ -109,12 +128,12 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
 
           {/* Controls */}
           <div className="flex items-center space-x-1.5 shrink-0">
-            {isImage && (
+            {isImage && !imageFailed && (
               <>
                 <button
                   type="button"
                   onClick={handleZoomOut}
-                  className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-[#162238] rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
                   title="Zoom Out"
                 >
                   <ZoomOut className="w-4 h-4" />
@@ -125,7 +144,7 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
                 <button
                   type="button"
                   onClick={handleZoomIn}
-                  className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-[#162238] rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
                   title="Zoom In"
                 >
                   <ZoomIn className="w-4 h-4" />
@@ -133,7 +152,7 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
                 <button
                   type="button"
                   onClick={handleRotate}
-                  className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-[#162238] rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
                   title="Rotate 90°"
                 >
                   <RotateCw className="w-4 h-4" />
@@ -141,32 +160,33 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
               </>
             )}
 
-            <a
-              href="https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?usp=drive_link"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-1 px-2 py-1 bg-sky-950/80 hover:bg-sky-900 text-sky-300 hover:text-white border border-sky-500/50 rounded-md text-[11px] font-bold transition-colors cursor-pointer mr-1"
-              title="Open Sharq Shared Google Drive Attachments Folder (All Engineers Full Access)"
+            {/* Direct Download button */}
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="flex items-center space-x-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              title="Download this attachment directly"
             >
-              <span>Drive Folder</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Download</span>
+            </button>
 
-            {(currentAttachment.dataUrl || currentAttachment.driveLink) && (
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
-                title="Download Attachment"
+            {currentAttachment.driveLink && (
+              <a
+                href={currentAttachment.driveLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 hover:bg-[#162238] rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
+                title="Open directly in Google Drive"
               >
-                <Download className="w-4 h-4" />
-              </button>
+                <ExternalLink className="w-4 h-4" />
+              </a>
             )}
 
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 bg-slate-800 hover:bg-rose-600 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer ml-1"
+              className="p-1.5 bg-[#162238] hover:bg-rose-600 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer ml-1"
               title="Close Viewer"
             >
               <X className="w-4 h-4" />
@@ -175,14 +195,14 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
         </div>
 
         {/* Modal Body: Attachment Display */}
-        <div className="relative flex-1 min-h-[360px] max-h-[70vh] bg-slate-950/90 flex items-center justify-center p-4 overflow-auto">
+        <div className="relative flex-1 min-h-[360px] max-h-[70vh] bg-[#080C14] flex items-center justify-center p-4 overflow-auto">
           {/* Navigation buttons if multiple attachments */}
           {attachments.length > 1 && (
             <>
               <button
                 type="button"
                 onClick={handlePrev}
-                className="absolute left-3 top-1/2 -translate-y-1/2 z-10 p-2 bg-black/60 hover:bg-black/80 text-white rounded-full transition-colors cursor-pointer border border-white/20"
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-10 p-2.5 bg-black/70 hover:bg-black/90 text-white rounded-full transition-all cursor-pointer border border-white/20 shadow-lg"
                 title="Previous File"
               >
                 <ChevronLeft className="w-5 h-5" />
@@ -190,7 +210,7 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
               <button
                 type="button"
                 onClick={handleNext}
-                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-2 bg-black/60 hover:bg-black/80 text-white rounded-full transition-colors cursor-pointer border border-white/20"
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-2.5 bg-black/70 hover:bg-black/90 text-white rounded-full transition-all cursor-pointer border border-white/20 shadow-lg"
                 title="Next File"
               >
                 <ChevronRight className="w-5 h-5" />
@@ -199,32 +219,45 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
           )}
 
           {/* Render image */}
-          {isImage ? (
+          {isImage && !imageFailed && activeImageSrc ? (
             <div className="flex items-center justify-center w-full h-full overflow-hidden">
               <img
-                src={currentAttachment.dataUrl || currentAttachment.driveLink}
+                src={activeImageSrc}
                 alt={currentAttachment.name}
                 referrerPolicy="no-referrer"
+                onError={() => {
+                  if (!useFallbackUrl && fallbackUrl) {
+                    setUseFallbackUrl(true);
+                  } else {
+                    setImageFailed(true);
+                  }
+                }}
                 style={{
                   transform: `scale(${zoom}) rotate(${rotation}deg)`,
                   transition: 'transform 0.15s ease-out',
                 }}
-                className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-lg"
+                className="max-h-[64vh] max-w-full object-contain rounded-lg shadow-2xl select-none"
               />
             </div>
           ) : isPdf ? (
-            <div className="w-full h-[60vh] flex flex-col items-center justify-center bg-slate-900 rounded-xl border border-slate-800 p-6 space-y-4">
+            <div className="w-full h-[60vh] flex flex-col items-center justify-center bg-[#10192B] rounded-xl border border-[#1E293B] p-6 space-y-4">
               <FileText className="w-16 h-16 text-rose-400" />
               <div className="text-center space-y-1">
                 <div className="font-bold text-sm text-white">{currentAttachment.name}</div>
                 <p className="text-xs text-slate-400">PDF Document Attachment</p>
               </div>
 
-              {currentAttachment.dataUrl ? (
+              {currentAttachment.dataUrl && currentAttachment.dataUrl.startsWith('data:application/pdf') ? (
                 <iframe
                   src={currentAttachment.dataUrl}
                   title={currentAttachment.name}
-                  className="w-full h-full rounded-lg border border-slate-700 bg-white"
+                  className="w-full h-full rounded-lg border border-[#1E293B] bg-white"
+                />
+              ) : fileId ? (
+                <iframe
+                  src={`https://drive.google.com/file/d/${fileId}/preview`}
+                  title={currentAttachment.name}
+                  className="w-full h-full rounded-lg border border-[#1E293B] bg-white"
                 />
               ) : (
                 <button
@@ -237,12 +270,21 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
                 </button>
               )}
             </div>
+          ) : fileId ? (
+            /* Google Drive Preview Iframe if direct img fails or if generic document */
+            <div className="w-full h-[60vh] flex flex-col items-center justify-center bg-[#10192B] rounded-xl border border-[#1E293B] p-2">
+              <iframe
+                src={`https://drive.google.com/file/d/${fileId}/preview`}
+                title={currentAttachment.name}
+                className="w-full h-full rounded-lg border border-[#1E293B] bg-[#080C14]"
+              />
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center p-8 space-y-3 text-center">
               <File className="w-16 h-16 text-slate-500" />
               <div className="font-bold text-sm text-white">{currentAttachment.name}</div>
               <p className="text-xs text-slate-400">
-                {currentAttachment.mimeType || 'Document file'}
+                {currentAttachment.type || currentAttachment.mimeType || 'Document file'}
               </p>
               <button
                 type="button"
@@ -258,12 +300,10 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
 
         {/* Thumbnail Selector at bottom if multiple files */}
         {attachments.length > 1 && (
-          <div className="px-4 py-2.5 bg-slate-950 border-t border-slate-800 flex items-center space-x-2 overflow-x-auto">
+          <div className="px-4 py-2.5 bg-[#080C14] border-t border-[#1B273D] flex items-center space-x-2 overflow-x-auto no-scrollbar">
             {attachments.map((att, idx) => {
-              const isItemImg =
-                att.mimeType?.startsWith('image/') ||
-                att.name?.match(/\.(jpg|jpeg|png|webp|gif)$/i) ||
-                (att.dataUrl && att.dataUrl.startsWith('data:image/'));
+              const isItemImg = isAttachmentImage(att);
+              const thumbUrl = getAttachmentDisplayUrl(att);
 
               return (
                 <button
@@ -273,17 +313,26 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
                     setCurrentIndex(idx);
                     setZoom(1);
                     setRotation(0);
+                    setImageFailed(false);
+                    setUseFallbackUrl(false);
                   }}
                   className={`flex items-center space-x-2 px-2.5 py-1.5 rounded-lg border text-xs font-medium shrink-0 transition-all cursor-pointer ${
                     idx === currentIndex
                       ? 'bg-teal-950 border-teal-500 text-teal-200 ring-1 ring-teal-500'
-                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white'
+                      : 'bg-[#10192B] border-[#1E293B] text-slate-400 hover:bg-[#162238] hover:text-white'
                   }`}
                 >
-                  {isItemImg ? (
-                    <ImageIcon className="w-3.5 h-3.5 text-teal-400" />
+                  {isItemImg && thumbUrl ? (
+                    <img
+                      src={thumbUrl}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className="w-4 h-4 object-cover rounded shrink-0"
+                    />
+                  ) : isItemImg ? (
+                    <ImageIcon className="w-3.5 h-3.5 text-teal-400 shrink-0" />
                   ) : (
-                    <FileText className="w-3.5 h-3.5 text-blue-400" />
+                    <FileText className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                   )}
                   <span className="max-w-[120px] truncate">{att.name}</span>
                 </button>

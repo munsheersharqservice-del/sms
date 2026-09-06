@@ -49,6 +49,7 @@ import {
 } from '../../utils/googleDrive';
 import { CaseAttachmentList } from '../Common/CaseAttachmentList';
 import { SharqDigitalReportModal } from '../Common/SharqDigitalReportModal';
+import { extractGoogleDriveFileId } from '../../utils/attachmentHelper';
 
 export const MyDeskView: React.FC = () => {
   const displayCleanText = (val: any, fallback: string = ''): string => {
@@ -369,7 +370,25 @@ export const MyDeskView: React.FC = () => {
       workDoneSummary: summary,
       serviceReportNumber: reportNum,
       serviceReportDriveLink: cleanDrive,
-      attachments: (sc.attachments || []).filter((a) => !a?.driveLink?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9')),
+      attachments: [
+        ...(sc.attachments || [])
+          .filter((a) => !a?.driveLink?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') && !a?.driveLink?.includes('/folders/'))
+          .map((a) => ({ ...a, stage: a.stage || ('New Case' as const) })),
+        ...(cleanDrive
+          ? [
+              {
+                id: `att-close-sr-${sc.id}`,
+                name: `Digital_Report_${reportNum || sc.ticketNumber}.pdf`,
+                size: 0,
+                type: 'application/pdf',
+                driveLink: cleanDrive,
+                driveFileId: extractGoogleDriveFileId(cleanDrive) || undefined,
+                stage: 'Close Case' as const,
+                uploadedAt: new Date().toISOString(),
+              },
+            ]
+          : []),
+      ],
       customerSignatoryName: signatory,
       customerSignature: sc.customerSignature || 'Signed Electronically',
       status: 'Done',
@@ -423,9 +442,9 @@ export const MyDeskView: React.FC = () => {
 
       let finalAttachment = '';
       let docMethodName: 'Manual Upload' | 'Digital Report' | 'Attached Document' = 'Digital Report';
-      let caseAttachments: AttachmentItem[] = [...(selectedCaseForAction.attachments || [])].filter(
-        (a) => !a?.driveLink?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9')
-      );
+      let caseAttachments: AttachmentItem[] = [...(selectedCaseForAction.attachments || [])]
+        .filter((a) => !a?.driveLink?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') && !a?.driveLink?.includes('/folders/'))
+        .map((a) => ({ ...a, stage: a.stage || ('New Case' as const) }));
 
       if (docMethod === 'MANUAL_UPLOAD') {
         docMethodName = 'Manual Upload';
@@ -441,7 +460,7 @@ export const MyDeskView: React.FC = () => {
         finalAttachment = expectedFileName;
 
         if (manualUploadedItem) {
-          const syncedItem = { ...manualUploadedItem, name: expectedFileName };
+          const syncedItem = { ...manualUploadedItem, name: expectedFileName, stage: 'Close Case' as const };
           caseAttachments = [...caseAttachments.filter((a) => a.id !== manualUploadedItem.id), syncedItem];
         }
       } else if (docMethod === 'DIGITAL_REPORT') {
@@ -455,8 +474,23 @@ export const MyDeskView: React.FC = () => {
         if (finalDriveLink.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') || finalDriveLink.includes('folders/')) finalDriveLink = '';
         finalAttachment = attachedDocItem?.name || (attachedDocFile ? attachedDocFile.name : `${docType}_${docNumber.trim() || selectedCaseForAction.ticketNumber}.pdf`);
         if (attachedDocItem) {
-          caseAttachments = [...caseAttachments.filter((a) => a.id !== attachedDocItem.id), attachedDocItem];
+          const syncedDoc = { ...attachedDocItem, stage: 'Close Case' as const };
+          caseAttachments = [...caseAttachments.filter((a) => a.id !== attachedDocItem.id), syncedDoc];
         }
+      }
+
+      // If finalDriveLink is present, also add as Close Case attachment if not already in list
+      if (finalDriveLink && !caseAttachments.some((a) => a.driveLink === finalDriveLink)) {
+        caseAttachments.push({
+          id: `att-close-${Date.now()}`,
+          name: finalAttachment || `Service_Report_${finalReportNum}.pdf`,
+          size: 0,
+          type: 'application/pdf',
+          driveLink: finalDriveLink,
+          driveFileId: extractGoogleDriveFileId(finalDriveLink) || undefined,
+          stage: 'Close Case',
+          uploadedAt: new Date().toISOString(),
+        });
       }
 
       const finalSignatory = customerSignatoryName.trim() || `${selectedCaseForAction.customerName} Representative`;

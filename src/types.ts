@@ -167,6 +167,8 @@ export interface AttachmentItem {
   driveLink?: string;
   uploadStatus?: 'local' | 'uploading' | 'uploaded' | 'error';
   uploadedAt: string;
+  stage?: 'New Case' | 'Close Case' | 'General';
+  category?: string;
 }
 
 export interface UsedSparePart {
@@ -178,7 +180,7 @@ export interface UsedSparePart {
 
 export interface ServiceCase {
   id: string;
-  ticketNumber: string; // Auto 202601, 202602...
+  ticketNumber: string; // Auto 1000, 1001, 1002...
   caseNumber: string; // Same as ticketNumber or formatted
   customerName: string;
   sector?: CustomerSector; // Government or Private

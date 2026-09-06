@@ -380,8 +380,16 @@ export const DashboardView: React.FC = () => {
 
             <div className="max-h-[520px] overflow-y-auto space-y-2 pr-1">
               {currentCasesList.length === 0 ? (
-                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
-                  No {selectedSection.toLowerCase()} service calls found.
+                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-400 text-xs flex flex-col items-center justify-center space-y-3">
+                  <p>No {selectedSection.toLowerCase()} service calls found.</p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('new_case')}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg text-xs transition cursor-pointer shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Create New Call (#1000)</span>
+                  </button>
                 </div>
               ) : (
                 currentCasesList.map((sc) => {

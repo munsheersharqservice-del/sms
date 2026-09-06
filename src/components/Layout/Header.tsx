@@ -31,6 +31,7 @@ export const Header: React.FC = () => {
     sheetsSyncStatus,
     autoSyncEnabled,
     clearAllData,
+    clearAllCases,
     googleUser,
     isGoogleConnected,
     connectGoogle,
@@ -43,8 +44,8 @@ export const Header: React.FC = () => {
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
 
   const handleClearData = () => {
-    if (window.confirm('Are you sure you want to clear all unsaved test data from the app and re-sync fresh from Master Excel Equipments & Software Registry?')) {
-      clearAllData();
+    if (window.confirm('Clear all service calls & completed work logs to start fresh for publishing? New tickets will start from #1000.')) {
+      clearAllCases();
     }
   };
 

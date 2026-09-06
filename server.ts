@@ -2586,6 +2586,83 @@ service@sharqmedicalsupply.qa`;
     }
   });
 
+  // Google Drive Upload endpoint
+  app.post('/api/drive/upload', async (req, res) => {
+    try {
+      const { fileName, mimeType, base64, folderId } = req.body;
+      const targetFolder = folderId || '1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9';
+      const authHeader = req.headers.authorization;
+
+      if (authHeader && authHeader.startsWith('Bearer ') && base64) {
+        const token = authHeader.replace('Bearer ', '').trim();
+        const boundary = `sharq_srv_${Date.now()}`;
+        const metadata = {
+          name: fileName,
+          mimeType: mimeType || 'application/octet-stream',
+          parents: [targetFolder],
+        };
+
+        const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
+        const fileBuffer = Buffer.from(base64Data, 'base64');
+        const metadataPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`;
+        const fileHeader = `--${boundary}\r\nContent-Type: ${mimeType || 'application/octet-stream'}\r\n\r\n`;
+        const endPart = `\r\n--${boundary}--`;
+
+        const bodyBuffer = Buffer.concat([
+          Buffer.from(metadataPart, 'utf-8'),
+          Buffer.from(fileHeader, 'utf-8'),
+          fileBuffer,
+          Buffer.from(endPart, 'utf-8'),
+        ]);
+
+        const driveRes = await fetch(
+          'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,thumbnailLink',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': `multipart/related; boundary=${boundary}`,
+            },
+            body: bodyBuffer,
+          }
+        );
+
+        if (driveRes.ok) {
+          const driveData = await driveRes.json();
+          // Make file readable
+          try {
+            await fetch(`https://www.googleapis.com/drive/v3/files/${driveData.id}/permissions`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ role: 'reader', type: 'anyone' }),
+            });
+          } catch (pErr) {
+            console.warn('Set drive perm note:', pErr);
+          }
+
+          return res.json({
+            success: true,
+            fileId: driveData.id,
+            driveLink: driveData.webViewLink || `https://drive.google.com/file/d/${driveData.id}/view`,
+          });
+        }
+      }
+
+      const localId = `att_${Date.now()}`;
+      return res.json({
+        success: true,
+        fileId: localId,
+        driveLink: '',
+      });
+    } catch (err: any) {
+      console.error('Drive upload endpoint error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // Google Sheets Create New Spreadsheet Endpoint
   app.post('/api/sheets/create-new', async (req, res) => {
     try {
