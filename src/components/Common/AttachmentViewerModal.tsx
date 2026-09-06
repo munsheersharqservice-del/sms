@@ -141,7 +141,18 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
               </>
             )}
 
-            {isAdmin && (currentAttachment.dataUrl || currentAttachment.driveLink) && (
+            <a
+              href="https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?usp=drive_link"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-1 px-2 py-1 bg-sky-950/80 hover:bg-sky-900 text-sky-300 hover:text-white border border-sky-500/50 rounded-md text-[11px] font-bold transition-colors cursor-pointer mr-1"
+              title="Open Sharq Shared Google Drive Attachments Folder (All Engineers Full Access)"
+            >
+              <span>Drive Folder</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+
+            {(currentAttachment.dataUrl || currentAttachment.driveLink) && (
               <button
                 type="button"
                 onClick={handleDownload}
@@ -215,7 +226,7 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
                   title={currentAttachment.name}
                   className="w-full h-full rounded-lg border border-slate-700 bg-white"
                 />
-              ) : isAdmin ? (
+              ) : (
                 <button
                   type="button"
                   onClick={handleDownload}
@@ -224,7 +235,7 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
                   <Download className="w-4 h-4" />
                   <span>Download / View PDF</span>
                 </button>
-              ) : null}
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center p-8 space-y-3 text-center">
@@ -233,16 +244,14 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
               <p className="text-xs text-slate-400">
                 {currentAttachment.mimeType || 'Document file'}
               </p>
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-lg flex items-center space-x-2 transition-colors cursor-pointer"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download Attachment</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-lg flex items-center space-x-2 transition-colors cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Attachment</span>
+              </button>
             </div>
           )}
         </div>

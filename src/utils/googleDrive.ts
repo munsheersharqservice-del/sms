@@ -1,8 +1,8 @@
 import { AttachmentItem } from '../types';
 import { getAccessToken, googleSignIn } from './firebaseAuth';
 
-export const SHARQ_GOOGLE_DRIVE_FOLDER_ID = '';
-export const SHARQ_GOOGLE_DRIVE_FOLDER_URL = '';
+export const SHARQ_GOOGLE_DRIVE_FOLDER_ID = '1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9';
+export const SHARQ_GOOGLE_DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?usp=drive_link';
 
 /**
  * Converts a base64 Data URL to a Blob
@@ -37,8 +37,9 @@ export async function directUploadBlobToGoogleDrive(
       name: fileName,
       mimeType: mimeType || 'application/octet-stream',
     };
-    if (targetParentId && !targetParentId.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') && targetParentId.trim().length > 5) {
-      metadata.parents = [targetParentId.trim()];
+    const parent = targetParentId || folderId || SHARQ_GOOGLE_DRIVE_FOLDER_ID;
+    if (parent && parent.trim().length > 5) {
+      metadata.parents = [parent.trim()];
     }
 
     const metadataPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`;
@@ -63,10 +64,10 @@ export async function directUploadBlobToGoogleDrive(
   };
 
   try {
-    const cleanFolder = folderId && !folderId.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') ? folderId : undefined;
-    let res = await attempt(cleanFolder);
+    const targetFolder = folderId || SHARQ_GOOGLE_DRIVE_FOLDER_ID;
+    let res = await attempt(targetFolder);
 
-    // If folder permission error (404/403/400), upload to user's root Google Drive
+    // If folder permission error (404/403/400), attempt fallback without parent
     if (!res.ok && (res.status === 404 || res.status === 403 || res.status === 400)) {
       res = await attempt();
     }

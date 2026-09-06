@@ -129,7 +129,7 @@ export const Navigation: React.FC = () => {
     <nav
       className={`border-b sticky top-14 z-30 transition-colors duration-200 ${
         isDarkMode
-          ? 'bg-slate-900/95 border-slate-800 shadow-sm backdrop-blur-md'
+          ? 'bg-[#0B111D]/95 border-[#1B273D] shadow-sm backdrop-blur-md'
           : 'bg-white/95 border-slate-200 shadow-2xs backdrop-blur-md'
       }`}
     >
@@ -147,7 +147,7 @@ export const Navigation: React.FC = () => {
                   isActive
                     ? `${item.activeColor}`
                     : isDarkMode
-                    ? 'bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700/60'
+                    ? 'bg-[#10192B] text-slate-300 hover:text-white hover:bg-[#162238] border border-[#1E293B]'
                     : 'bg-slate-50 text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200/80'
                 }`}
               >

@@ -5,6 +5,8 @@ import {
   EyeOff,
   Image as ImageIcon,
   FileText,
+  ExternalLink,
+  FolderGit2,
 } from 'lucide-react';
 import { AttachmentItem } from '../../types';
 import { AttachmentViewerModal } from './AttachmentViewerModal';
@@ -30,16 +32,15 @@ export const CaseAttachmentList: React.FC<CaseAttachmentListProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeModalIndex, setActiveModalIndex] = useState(0);
 
-  // Normalize and deduplicate attachment items, strictly hiding generic folder links
+  // Normalize and deduplicate attachment items, strictly hiding raw folder links
   const items: AttachmentItem[] = (() => {
     const seen = new Set<string>();
     const result: AttachmentItem[] = [];
 
     for (const att of attachments) {
       if (!att) continue;
-      // Exclude generic Google Drive folder link from attachments display
-      if (att.driveLink?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') && !att.dataUrl) continue;
-      if (att.dataUrl?.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9')) continue;
+      // Exclude raw Google Drive folder link from individual attachments display
+      if (att.driveLink?.includes('/folders/') && !att.dataUrl) continue;
 
       const key = att.id || att.driveFileId || att.dataUrl || att.driveLink || att.name;
       if (key && !seen.has(key)) {
@@ -51,7 +52,6 @@ export const CaseAttachmentList: React.FC<CaseAttachmentListProps> = ({
     if (
       result.length === 0 &&
       legacyAttachmentUrl &&
-      !legacyAttachmentUrl.includes('1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9') &&
       !legacyAttachmentUrl.includes('/folders/')
     ) {
       result.push({
@@ -88,23 +88,36 @@ export const CaseAttachmentList: React.FC<CaseAttachmentListProps> = ({
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="px-2 py-0.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-md text-[11px] font-bold flex items-center space-x-1 shadow-2xs transition-colors cursor-pointer"
-          >
-            {isExpanded ? (
-              <>
-                <EyeOff className="w-3 h-3 text-slate-500 dark:text-slate-400" />
-                <span>Hide</span>
-              </>
-            ) : (
-              <>
-                <Eye className="w-3 h-3 text-teal-600 dark:text-teal-400" />
-                <span>Show</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center space-x-1.5">
+            <a
+              href="https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?usp=drive_link"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 py-0.5 bg-sky-100 hover:bg-sky-200 dark:bg-sky-950/80 dark:hover:bg-sky-900 text-sky-800 dark:text-sky-300 border border-sky-300 dark:border-sky-600 rounded-md text-[10px] font-bold flex items-center space-x-1 transition-colors cursor-pointer"
+              title="Open Sharq Medical Shared Drive Folder (All Engineers Full Access)"
+            >
+              <FolderGit2 className="w-2.5 h-2.5 text-sky-600 dark:text-sky-400" />
+              <span>Drive Folder</span>
+            </a>
+
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="px-2 py-0.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-md text-[11px] font-bold flex items-center space-x-1 shadow-2xs transition-colors cursor-pointer"
+            >
+              {isExpanded ? (
+                <>
+                  <EyeOff className="w-3 h-3 text-slate-500 dark:text-slate-400" />
+                  <span>Hide</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                  <span>Show</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Collapsed / Quick Preview List */}

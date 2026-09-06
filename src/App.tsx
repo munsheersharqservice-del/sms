@@ -43,10 +43,10 @@ const AppShell: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen font-sans antialiased selection:bg-[#1D3557] selection:text-white transition-colors duration-200 ${
+      className={`min-h-screen font-sans antialiased selection:bg-cyan-500 selection:text-slate-950 transition-colors duration-200 ${
         isDarkMode
-          ? 'bg-slate-950 text-slate-100 dark'
-          : 'bg-[#F8F9FA] text-[#212529]'
+          ? 'bg-[#080C14] text-slate-100'
+          : 'bg-[#F4F6F9] text-[#0F172A]'
       }`}
     >
       <Header />

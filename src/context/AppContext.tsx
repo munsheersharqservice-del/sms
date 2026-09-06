@@ -232,22 +232,33 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Theme state: dark / light mode
+  // Theme state: dark / light mode (Executive Professional Dark Theme Default)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem('sharq_dark_mode');
-    if (saved !== null) {
-      return saved === 'true';
-    }
-    return false;
+    try {
+      // Default to professional executive dark theme
+      const darkMigrated = localStorage.getItem('sharq_dark_pro_v2');
+      if (!darkMigrated) {
+        localStorage.setItem('sharq_dark_pro_v2', 'true');
+        localStorage.setItem('sharq_dark_mode', 'true');
+        return true;
+      }
+      const saved = localStorage.getItem('sharq_dark_mode');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    } catch {}
+    return true; // Executive dark theme by default
   });
 
   useEffect(() => {
-    localStorage.setItem('sharq_dark_mode', String(isDarkMode));
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    try {
+      localStorage.setItem('sharq_dark_mode', String(isDarkMode));
+      if (isDarkMode) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch {}
   }, [isDarkMode]);
 
   const toggleDarkMode = () => setIsDarkMode((prev) => !prev);
@@ -576,23 +587,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   }, [users]);
 
-  // Current logged in engineer / user - Restores remembered login or active tab session
+  // Current logged in engineer / user
+  // STRICT USER INTENT: On opening the deployed link / app link, FIRST ALWAYS open the Sign In / Sign Up page!
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
+      // Only keep session if active in the current tab session
       const activeSession = sessionStorage.getItem('sharq_active_session_user');
       if (activeSession) {
         const parsed = JSON.parse(activeSession);
         if (parsed && parsed.name) return parsed;
       }
-      const remember = localStorage.getItem('sharq_remember_login');
-      if (remember) {
-        const savedUser = localStorage.getItem('sharq_v3_current_user');
-        if (savedUser) {
-          const parsed = JSON.parse(savedUser);
-          if (parsed && parsed.name) return parsed;
-        }
-      }
     } catch {}
+    // Always default to null on fresh link opening so the user sees Sign In / Sign Up first!
     return null;
   });
 
@@ -1065,9 +1071,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sessionStorage.setItem('sharq_active_session_user', JSON.stringify(found));
         if (remember) {
           localStorage.setItem('sharq_remember_login', 'true');
+          localStorage.setItem('sharq_remembered_username', found.email || found.name);
           localStorage.setItem('sharq_v3_current_user', JSON.stringify(found));
         } else {
           localStorage.removeItem('sharq_remember_login');
+          localStorage.removeItem('sharq_remembered_username');
+          localStorage.removeItem('sharq_v3_current_user');
         }
         return true;
       }

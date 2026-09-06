@@ -1,68 +1,157 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
 :root {
-  --app-bg: #F8F9FA;
-  --card-bg: #FFFFFF;
-  --primary-navy: #1D3557;
-  --text-charcoal: #212529;
-  --logo-green: #4CAF50;
-  --logo-orange: #FF5722;
+  color-scheme: dark;
+  --bg-main: #080C14;
+  --bg-card: #0E1626;
+  --bg-card-subtle: #141F33;
+  --border-card: #1B273D;
+  --text-main: #F8FAFC;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+  --accent-cyan: #06B6D4;
+  --accent-blue: #0EA5E9;
+  --accent-emerald: #10B981;
+}
+
+html.dark {
+  color-scheme: dark;
+  --bg-main: #080C14;
+  --bg-card: #0E1626;
+  --bg-card-subtle: #141F33;
+  --border-card: #1B273D;
+  --text-main: #F8FAFC;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+}
+
+html:not(.dark) {
+  color-scheme: light;
+  --bg-main: #F4F6F9;
+  --bg-card: #FFFFFF;
+  --bg-card-subtle: #F8FAFC;
+  --border-card: #E2E8F0;
+  --text-main: #0F172A;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
 }
 
 body {
-  background-color: #F8F9FA;
-  color: #212529;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: #080C14;
+  color: #F8FAFC;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Theme Utilities */
-.bg-app-bg {
-  background-color: #F8F9FA;
+html:not(.dark) body {
+  background-color: #F4F6F9;
+  color: #0F172A;
 }
 
-.bg-surface-white {
-  background-color: #FFFFFF;
+/* Custom Scrollbar for sleek modern UI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
 }
 
-.bg-primary-navy {
-  background-color: #1D3557;
+/* Comprehensive Dark Mode Unified Transformations */
+html.dark .bg-white,
+html.dark [class*="bg-[#FFFFFF]"],
+html.dark [class*="bg-[#ffffff]"] {
+  background-color: #0E1626 !important;
+  color: #F8FAFC !important;
+  border-color: #1B273D !important;
 }
 
-.text-primary-navy {
-  color: #1D3557;
+html.dark [class*="bg-[#F8F9FA]"],
+html.dark [class*="bg-[#f8f9fa]"],
+html.dark .bg-slate-50,
+html.dark .bg-gray-50 {
+  background-color: #0B111D !important;
+  color: #F8FAFC !important;
+  border-color: #1B273D !important;
 }
 
-.border-primary-navy {
-  border-color: #1D3557;
+html.dark .bg-slate-100,
+html.dark .bg-gray-100 {
+  background-color: #141F33 !important;
+  color: #F8FAFC !important;
+  border-color: #1B273D !important;
 }
 
-.text-charcoal {
-  color: #212529;
+html.dark .border-slate-200,
+html.dark .border-slate-100,
+html.dark .border-gray-200,
+html.dark .border-gray-100 {
+  border-color: #1B273D !important;
 }
 
-.bg-logo-green {
-  background-color: #4CAF50;
+html.dark [class*="text-[#212529]"],
+html.dark .text-slate-900,
+html.dark .text-gray-900 {
+  color: #F8FAFC !important;
 }
 
-.text-logo-green {
-  color: #4CAF50;
+html.dark .text-slate-800,
+html.dark .text-gray-800,
+html.dark .text-slate-700,
+html.dark .text-gray-700 {
+  color: #CBD5E1 !important;
 }
 
-.border-logo-green {
-  border-color: #4CAF50;
+html.dark .text-slate-600,
+html.dark .text-gray-600,
+html.dark .text-slate-500,
+html.dark .text-gray-500 {
+  color: #94A3B8 !important;
 }
 
-.bg-logo-orange {
-  background-color: #FF5722;
+/* Form inputs & controls in Dark Mode */
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: #0A0F1A !important;
+  border-color: #1B273D !important;
+  color: #F8FAFC !important;
 }
 
-.text-logo-orange {
-  color: #FF5722;
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #06B6D4 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2) !important;
 }
 
-.border-logo-orange {
-  border-color: #FF5722;
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748B !important;
 }
 
+/* Table rows styling in Dark Mode */
+html.dark table thead th {
+  background-color: #0B111D !important;
+  color: #94A3B8 !important;
+  border-color: #1B273D !important;
+}
+
+html.dark table tbody tr {
+  border-color: #1B273D !important;
+}
+
+html.dark table tbody tr:hover {
+  background-color: #141F33 !important;
+}
