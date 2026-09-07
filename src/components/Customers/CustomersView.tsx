@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Department, Customer, CustomerSector, isGovernmentCustomer, resolveCustomerSector } from '../../types';
 import { SheetsSyncModal } from '../GoogleSheets/SheetsSyncModal';
+import { AssetSoftwareSideDrawer } from '../Assets/AssetSoftwareSideDrawer';
 
 export const CustomersView: React.FC = () => {
   const {
@@ -50,6 +51,15 @@ export const CustomersView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+
+  // Asset Creation Side Drawer State for Customer View
+  const [isAddAssetDrawerOpen, setIsAddAssetDrawerOpen] = useState(false);
+  const [targetCustomerForAsset, setTargetCustomerForAsset] = useState<string>('');
+
+  const handleOpenAddAsset = (customerName?: string) => {
+    setTargetCustomerForAsset(customerName || '');
+    setIsAddAssetDrawerOpen(true);
+  };
 
   // Live Sync state
   const [isSyncingAll, setIsSyncingAll] = useState(false);
@@ -229,14 +239,26 @@ export const CustomersView: React.FC = () => {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={openAddModal}
-          className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center space-x-1.5 transition-colors shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>ADD NEW CUSTOMER</span>
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => handleOpenAddAsset()}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center space-x-1.5 transition-colors shrink-0 cursor-pointer"
+            title="Register and link a new asset to customer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>ADD ASSET</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center space-x-1.5 transition-colors shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>ADD NEW CUSTOMER</span>
+          </button>
+        </div>
       </div>
 
       {/* Google Sheet Live Sync Bar - Admin only */}
@@ -439,26 +461,37 @@ export const CustomersView: React.FC = () => {
                       </span>
                     </div>
 
-                    {isAdmin && (
-                      <div className="flex items-center space-x-1">
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(cust)}
-                          className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-md transition-colors"
-                          title="Edit Customer Details"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(cust.id, cust.name)}
-                          className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-md transition-colors"
-                          title="Delete Customer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center space-x-1">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAddAsset(cust.name)}
+                        className="p-1.5 hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 rounded-md transition-colors cursor-pointer"
+                        title={`Add Asset for ${cust.name}`}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+
+                      {isAdmin && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(cust)}
+                            className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-md transition-colors"
+                            title="Edit Customer Details"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(cust.id, cust.name)}
+                            className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-md transition-colors"
+                            title="Delete Customer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-1.5 pt-3 text-xs text-slate-600">
@@ -487,8 +520,8 @@ export const CustomersView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Linked Assets & Service Calls Badges */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                {/* Linked Assets & Service Calls Badges + Quick Add Asset */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs flex-wrap gap-2">
                   <div className="flex items-center space-x-2">
                     <button
                       type="button"
@@ -498,6 +531,7 @@ export const CustomersView: React.FC = () => {
                         setActiveTab('assets');
                       }}
                       className="px-2 py-1 bg-slate-100 hover:bg-teal-50 hover:text-teal-800 text-slate-700 rounded-md font-semibold text-[11px] flex items-center space-x-1"
+                      title={`View all ${customerAssets.length} registered assets for ${cust.name}`}
                     >
                       <HardDrive className="w-3 h-3 text-teal-600" />
                       <span>{customerAssets.length} Assets</span>
@@ -515,15 +549,28 @@ export const CustomersView: React.FC = () => {
                     </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('new_case');
-                    }}
-                    className="text-[11px] font-bold text-teal-700 hover:text-teal-900"
-                  >
-                    + Open Call
-                  </button>
+                  <div className="flex items-center space-x-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAddAsset(cust.name)}
+                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold text-[11px] flex items-center space-x-1 shadow-2xs cursor-pointer transition-colors"
+                      title={`Add new asset/equipment for ${cust.name}`}
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Add Asset</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('new_case');
+                      }}
+                      className="px-2 py-1 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-700 rounded-md font-semibold text-[11px] cursor-pointer"
+                      title={`Open service call for ${cust.name}`}
+                    >
+                      + Call
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -686,6 +733,23 @@ export const CustomersView: React.FC = () => {
                 </div>
               </div>
 
+              {editingCustomer && (
+                <div className="pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const custName = editingCustomer.name;
+                      setIsModalOpen(false);
+                      handleOpenAddAsset(custName);
+                    }}
+                    className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>+ ADD ASSET / EQUIPMENT FOR THIS CUSTOMER</span>
+                  </button>
+                </div>
+              )}
+
               <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -710,6 +774,17 @@ export const CustomersView: React.FC = () => {
       <SheetsSyncModal
         isOpen={isSheetsModalOpen}
         onClose={() => setIsSheetsModalOpen(false)}
+      />
+
+      {/* Asset & Equipment Registration Side Drawer */}
+      <AssetSoftwareSideDrawer
+        isOpen={isAddAssetDrawerOpen}
+        onClose={() => {
+          setIsAddAssetDrawerOpen(false);
+          setTargetCustomerForAsset('');
+        }}
+        initialMode="asset"
+        prefilledCustomerName={targetCustomerForAsset}
       />
     </div>
   );

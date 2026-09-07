@@ -9,7 +9,6 @@ import {
   UserCheck,
   UserPlus,
   RefreshCw,
-  Trash2,
   Download,
   Cloud,
   CheckCircle2,
@@ -30,8 +29,6 @@ export const Header: React.FC = () => {
     isSyncingSheets,
     sheetsSyncStatus,
     autoSyncEnabled,
-    clearAllData,
-    clearAllCases,
     googleUser,
     isGoogleConnected,
     connectGoogle,
@@ -42,12 +39,6 @@ export const Header: React.FC = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
-
-  const handleClearData = () => {
-    if (window.confirm('Clear all service calls & completed work logs to start fresh for publishing? New tickets will start from #1000.')) {
-      clearAllCases();
-    }
-  };
 
   return (
     <>
@@ -160,7 +151,7 @@ export const Header: React.FC = () => {
                 )
               )}
 
-              {/* ADMIN ACTIONS: Excel Download, Google Sheets Sync & Clear Data */}
+              {/* ADMIN ACTIONS: Excel Download & Google Sheets Sync */}
               {isAdmin && (
                 <>
                   {/* Excel Download (.xlsx) */}
@@ -193,16 +184,6 @@ export const Header: React.FC = () => {
                         LIVE
                       </span>
                     )}
-                  </button>
-
-                  {/* Clear All Data Button */}
-                  <button
-                    type="button"
-                    onClick={handleClearData}
-                    className="hidden md:flex items-center space-x-1 px-2 py-1.5 bg-slate-800 hover:bg-red-950/80 border border-slate-700 hover:border-red-700/60 text-slate-300 hover:text-red-300 rounded-lg text-xs font-medium transition-colors"
-                    title="Clear all stored application data"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-400" />
                   </button>
                 </>
               )}

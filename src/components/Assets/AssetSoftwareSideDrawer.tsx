@@ -303,12 +303,19 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
           setAssetManufacturer('');
           setIsCustomManufacturer(false);
           setCustomManufacturerInput('');
-          setAssetCustomer(prefilledCustomerName || '');
-          const matchCust = customers.find((c) => c.name === prefilledCustomerName);
+          const targetCustName = (prefilledCustomerName || '').trim();
+          const matchCust = targetCustName
+            ? customers.find((c) => c.name.trim().toLowerCase() === targetCustName.toLowerCase())
+            : undefined;
+          setAssetCustomer(matchCust ? matchCust.name : targetCustName);
           setAssetSector(matchCust?.sector || 'Private');
           setAssetLocation(matchCust?.location || '');
           setAssetRoom('');
-          setAssetDept('Dental');
+          if (matchCust?.department && (matchCust.department === 'Medical' || matchCust.department === 'Dental')) {
+            setAssetDept(matchCust.department);
+          } else {
+            setAssetDept('Dental');
+          }
           setAssetInstallDate('');
           setAssetWarrantyYears(1);
           setAssetWarrantyExpiry('');
