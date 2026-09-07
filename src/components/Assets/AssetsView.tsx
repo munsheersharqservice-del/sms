@@ -88,6 +88,8 @@ export const AssetsView: React.FC = () => {
   const [warrantyFilter, setWarrantyFilter] = useState<string>('ALL'); // ALL, ACTIVE, EXPIRED
   const [selectedAssetForDetails, setSelectedAssetForDetails] = useState<Asset | null>(null);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+
+  const effectiveSubTab = isAdmin ? assetSubTab : 'search';
   const [editingSoftwareLicense, setEditingSoftwareLicense] = useState<SoftwareLicense | null>(null);
 
   // Side Drawer State (Compact Trigger)
@@ -286,176 +288,180 @@ export const AssetsView: React.FC = () => {
           </div>
         </div>
 
-        {/* Top Actions */}
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => handleOpenSideDrawerAddAsset()}
-            className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ REGISTER ASSET</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleOpenSideDrawerAddSoftware()}
-            className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ SOFTWARE LICENSE</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 2. SUB BAR: VIEW SWITCHER TABS & ACTIONS                                  */}
-      {/* ========================================================================= */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl p-3.5 shadow-xs border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-        {/* Left: View Switcher Tabs */}
-        <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200 overflow-x-auto no-scrollbar">
-          <button
-            type="button"
-            onClick={() => setAssetSubTab('search')}
-            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-              assetSubTab === 'search'
-                ? 'bg-white text-teal-800 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <span className="flex items-center gap-1.5">
-              <HardDrive className="w-3.5 h-3.5 text-teal-600" />
-              <span>Equipment Directory ({assets.length})</span>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setAssetSubTab('software_dir')}
-            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-              assetSubTab === 'software_dir'
-                ? 'bg-white text-indigo-800 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <span className="flex items-center gap-1.5">
-              <Server className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Software Registry ({softwareLicenses.length})</span>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setAssetSubTab('customers')}
-            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-              assetSubTab === 'customers'
-                ? 'bg-white text-emerald-800 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <span className="flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Customers Database ({customers.length})</span>
-            </span>
-          </button>
-        </div>
-
-        {/* Right: Small & Compact Add Actions + Excel Link + Sync */}
-        <div className="flex items-center space-x-2">
-          {/* SMALL ADD ASSET BUTTON */}
-          <button
-            type="button"
-            onClick={() => handleOpenSideDrawerAddAsset()}
-            className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
-            title="Add New Equipment via Side Window"
-          >
-            <Plus className="w-3.5 h-3.5 text-teal-600" />
-            <span>+ Asset</span>
-          </button>
-
-          {/* SMALL ADD SOFTWARE BUTTON */}
-          <button
-            type="button"
-            onClick={() => handleOpenSideDrawerAddSoftware()}
-            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-300 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
-            title="Add New Software License via Side Window"
-          >
-            <Plus className="w-3.5 h-3.5 text-indigo-600" />
-            <span>+ Software</span>
-          </button>
-
-          {/* Google Sheets Live Link & Sync Toolbar (Accessible to all engineers & admins) */}
-          <div className="flex items-center space-x-1.5 pl-1 border-l border-slate-200">
-            {!isGoogleConnected && (
-              <button
-                type="button"
-                onClick={() => connectGoogle()}
-                className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-md text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
-                title="Connect Google Account for Live Sheet write access"
-              >
-                Connect Google
-              </button>
-            )}
-
-            <a
-              href={currentSpreadsheetUrl || EXCEL_SOFTWARE_REGISTRY_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors"
-              title="Open Connected Spreadsheet in Google Sheets"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            </a>
-
+        {/* Top Actions - Admin only */}
+        {isAdmin && (
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               type="button"
-              onClick={async () => {
-                setIsExportingAll(true);
-                try {
-                  if (!isGoogleConnected) {
-                    await connectGoogle();
-                  }
-                  await exportToGoogleSheets();
-                } catch (e: any) {
-                  console.warn('Sync error:', e);
-                } finally {
-                  setIsExportingAll(false);
-                }
-              }}
-              disabled={isExportingAll || isSyncingSheets}
-              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
-              title="Sync all assets & records live to Google Sheet"
+              onClick={() => handleOpenSideDrawerAddAsset()}
+              className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
             >
-              <UploadCloud className={`w-3.5 h-3.5 text-emerald-600 ${isExportingAll ? 'animate-bounce' : ''}`} />
-              <span>{isExportingAll ? 'Syncing...' : 'Sync to Sheet'}</span>
+              <Plus className="w-4 h-4" />
+              <span>+ REGISTER ASSET</span>
             </button>
-
             <button
               type="button"
-              onClick={() => {
-                refreshSoftwareLicensesFromExcel(true);
-                refreshFromGoogleSheets(true);
-              }}
-              disabled={isSyncingSheets}
-              className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-              title="Refresh Master Registry Data from Google Sheets"
+              onClick={() => handleOpenSideDrawerAddSoftware()}
+              className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
             >
-              <RefreshCw className={`w-4 h-4 ${isSyncingSheets ? 'animate-spin text-teal-600' : ''}`} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsSheetsModalOpen(true)}
-              className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-              title="Google Sheets & Webhook Configuration"
-            >
-              <Settings className="w-4 h-4" />
+              <Plus className="w-4 h-4" />
+              <span>+ SOFTWARE LICENSE</span>
             </button>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Sync Status Banner */}
-      {sheetsSyncStatus && (
+      {/* ========================================================================= */}
+      {/* 2. SUB BAR: VIEW SWITCHER TABS & ACTIONS - Admin only                     */}
+      {/* ========================================================================= */}
+      {isAdmin && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-3.5 shadow-xs border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          {/* Left: View Switcher Tabs */}
+          <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200 overflow-x-auto no-scrollbar">
+            <button
+              type="button"
+              onClick={() => setAssetSubTab('search')}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                assetSubTab === 'search'
+                  ? 'bg-white text-teal-800 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <HardDrive className="w-3.5 h-3.5 text-teal-600" />
+                <span>Equipment Directory ({assets.length})</span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAssetSubTab('software_dir')}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                assetSubTab === 'software_dir'
+                  ? 'bg-white text-indigo-800 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <Server className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Software Registry ({softwareLicenses.length})</span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAssetSubTab('customers')}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                assetSubTab === 'customers'
+                  ? 'bg-white text-emerald-800 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Customers Database ({customers.length})</span>
+              </span>
+            </button>
+          </div>
+
+          {/* Right: Small & Compact Add Actions + Excel Link + Sync */}
+          <div className="flex items-center space-x-2">
+            {/* SMALL ADD ASSET BUTTON */}
+            <button
+              type="button"
+              onClick={() => handleOpenSideDrawerAddAsset()}
+              className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
+              title="Add New Equipment via Side Window"
+            >
+              <Plus className="w-3.5 h-3.5 text-teal-600" />
+              <span>+ Asset</span>
+            </button>
+
+            {/* SMALL ADD SOFTWARE BUTTON */}
+            <button
+              type="button"
+              onClick={() => handleOpenSideDrawerAddSoftware()}
+              className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-300 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
+              title="Add New Software License via Side Window"
+            >
+              <Plus className="w-3.5 h-3.5 text-indigo-600" />
+              <span>+ Software</span>
+            </button>
+
+            {/* Google Sheets Live Link & Sync Toolbar */}
+            <div className="flex items-center space-x-1.5 pl-1 border-l border-slate-200">
+              {!isGoogleConnected && (
+                <button
+                  type="button"
+                  onClick={() => connectGoogle()}
+                  className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-md text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                  title="Connect Google Account for Live Sheet write access"
+                >
+                  Connect Google
+                </button>
+              )}
+
+              <a
+                href={currentSpreadsheetUrl || EXCEL_SOFTWARE_REGISTRY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors"
+                title="Open Connected Spreadsheet in Google Sheets"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              </a>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsExportingAll(true);
+                  try {
+                    if (!isGoogleConnected) {
+                      await connectGoogle();
+                    }
+                    await exportToGoogleSheets();
+                  } catch (e: any) {
+                    console.warn('Sync error:', e);
+                  } finally {
+                    setIsExportingAll(false);
+                  }
+                }}
+                disabled={isExportingAll || isSyncingSheets}
+                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+                title="Sync all assets & records live to Google Sheet"
+              >
+                <UploadCloud className={`w-3.5 h-3.5 text-emerald-600 ${isExportingAll ? 'animate-bounce' : ''}`} />
+                <span>{isExportingAll ? 'Syncing...' : 'Sync to Sheet'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  refreshSoftwareLicensesFromExcel(true);
+                  refreshFromGoogleSheets(true);
+                }}
+                disabled={isSyncingSheets}
+                className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                title="Refresh Master Registry Data from Google Sheets"
+              >
+                <RefreshCw className={`w-4 h-4 ${isSyncingSheets ? 'animate-spin text-teal-600' : ''}`} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSheetsModalOpen(true)}
+                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                title="Google Sheets & Webhook Configuration"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sync Status Banner - Admin only */}
+      {isAdmin && sheetsSyncStatus && (
         <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg text-xs font-semibold flex items-center justify-between animate-in fade-in">
           <div className="flex items-center space-x-2">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -468,7 +474,7 @@ export const AssetsView: React.FC = () => {
       {/* ========================================================================= */}
       {/* 2. COMPACT SEARCH & FILTER SECTION WITH SEARCH BUTTON & COLLAPSIBLE LIST   */}
       {/* ========================================================================= */}
-      {assetSubTab === 'search' && (
+      {effectiveSubTab === 'search' && (
         <div className="space-y-3">
           <div className="bg-white rounded-xl p-3 sm:p-3.5 shadow-xs border border-slate-200 space-y-2.5">
             {/* Search Input Bar with explicit SEARCH BUTTON and Filter Toggle */}
@@ -1014,9 +1020,9 @@ export const AssetsView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* 5. SUBTAB 2: SOFTWARE DIRECTORY VIEW                                      */}
+      {/* 5. SUBTAB 2: SOFTWARE DIRECTORY VIEW - Admin only                         */}
       {/* ========================================================================= */}
-      {assetSubTab === 'software_dir' && (
+      {isAdmin && effectiveSubTab === 'software_dir' && (
         <SoftwareDirectoryView
           onRegisterNew={() => {
             handleOpenSideDrawerAddSoftware();
@@ -1028,16 +1034,21 @@ export const AssetsView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* 5.1. SUBTAB 3: CUSTOMERS DATABASE VIEW                                   */}
+      {/* 5.1. SUBTAB 3: CUSTOMERS DATABASE VIEW - Admin only                       */}
       {/* ========================================================================= */}
-      {assetSubTab === 'customers' && <CustomersView />}
+      {isAdmin && effectiveSubTab === 'customers' && <CustomersView />}
 
       {/* ========================================================================= */}
       {/* 6. SIDE DRAWER FOR QUICK ADD ASSET & SOFTWARE (COMPACT SLIDE-IN)          */}
       {/* ========================================================================= */}
       <AssetSoftwareSideDrawer
         isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          setDrawerPrefilledAsset(null);
+          setDrawerPrefilledSoftware(null);
+          setDrawerPrefilledCustomer(undefined);
+        }}
         initialMode={drawerMode}
         prefilledCustomerName={drawerPrefilledCustomer}
         prefilledAsset={drawerPrefilledAsset}
@@ -1064,15 +1075,30 @@ export const AssetsView: React.FC = () => {
               </div>
               <div className="flex items-center space-x-2">
                 {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => handlePrintServiceHistory(selectedAssetForDetails)}
-                    className="px-3 py-1 bg-[#1D3557] hover:bg-[#15273f] text-teal-300 text-xs font-bold rounded-md flex items-center space-x-1.5 border border-teal-500/30 cursor-pointer shadow-xs"
-                    title="Download Equipment Service Passport as PDF"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download Passport PDF</span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ast = selectedAssetForDetails;
+                        setSelectedAssetForDetails(null);
+                        handleOpenSideDrawerEditAsset(ast);
+                      }}
+                      className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-md flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                      title="Edit Asset Details"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      <span>Edit Asset</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePrintServiceHistory(selectedAssetForDetails)}
+                      className="px-3 py-1 bg-[#1D3557] hover:bg-[#15273f] text-teal-300 text-xs font-bold rounded-md flex items-center space-x-1.5 border border-teal-500/30 cursor-pointer shadow-xs"
+                      title="Download Equipment Service Passport as PDF"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download Passport PDF</span>
+                    </button>
+                  </>
                 )}
                 <button
                   type="button"

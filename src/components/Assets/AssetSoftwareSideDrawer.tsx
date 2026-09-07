@@ -27,6 +27,7 @@ import {
   Search,
   Check,
   Microscope,
+  AlertCircle,
 } from 'lucide-react';
 import { Department, Asset, SoftwareLicense, AccessoryItem, CustomerSector, PpmFrequency, AttachmentItem, PpmType, isGovernmentCustomer, resolveCustomerSector } from '../../types';
 import { EXCEL_SOFTWARE_REGISTRY_URL } from '../Software/SoftwareDirectoryView';
@@ -118,6 +119,7 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
   const [isExportingSheets, setIsExportingSheets] = useState(false);
   const [activeMode, setActiveMode] = useState<'asset' | 'software'>(initialMode);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Quick Customer Add Modal State
   const [showQuickAddCust, setShowQuickAddCust] = useState(false);
@@ -507,9 +509,10 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
     ).trim().toUpperCase() || 'SHARQ MEDICAL';
 
     if (!assetSerial.trim() || !assetModel.trim() || !assetCustomer.trim()) {
-      alert('Please fill in Serial Number, Model, and Customer Name.');
+      setFormError('Please fill in Serial Number, Model, and Customer Name.');
       return;
     }
+    setFormError(null);
 
     // Auto-create customer in Master Customers if not yet registered
     const trimmedCust = assetCustomer.trim().toUpperCase();
@@ -567,6 +570,7 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
 
     if (prefilledAsset) {
       updateAsset(prefilledAsset.id, {
+        originalSerialNumber: prefilledAsset.serialNumber,
         serialNumber: assetSerial.trim().toUpperCase(),
         assetNumber: (assetNumber || '').trim().toUpperCase() || undefined,
         model: assetModel.trim().toUpperCase(),
@@ -591,7 +595,11 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
         accessories: parsedAccessories,
         partsApplicable: savedParts,
       });
-      setSuccessMessage(`Asset ${assetSerial.toUpperCase()} updated & live synced!`);
+      setSuccessMessage(`Asset ${assetSerial.toUpperCase()} updated & live synced to Excel and Database!`);
+      setTimeout(() => {
+        setSuccessMessage(null);
+        onClose();
+      }, 1200);
     } else {
       addAsset({
         serialNumber: assetSerial.trim().toUpperCase(),
@@ -768,6 +776,14 @@ export const AssetSoftwareSideDrawer: React.FC<AssetSoftwareSideDrawerProps> = (
           <div className="m-4 p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold flex items-center space-x-2 animate-in fade-in shrink-0">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* Error Banner */}
+        {formError && (
+          <div className="m-4 p-3 bg-rose-50 border border-rose-300 text-rose-800 rounded-xl text-xs font-bold flex items-center space-x-2 animate-in fade-in shrink-0">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{formError}</span>
           </div>
         )}
 

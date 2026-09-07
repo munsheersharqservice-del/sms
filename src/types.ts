@@ -111,6 +111,7 @@ export interface AccessoryItem {
 export interface Asset {
   id: string;
   serialNumber: string;
+  originalSerialNumber?: string; // Tracks original serial before edit for Google Sheets row matching
   model: string;
   manufacturer: string;
   customerName: string;

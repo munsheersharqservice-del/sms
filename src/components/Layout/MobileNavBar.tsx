@@ -10,6 +10,7 @@ import {
   FileText,
   FolderGit2,
   Building2,
+  Users,
   MoreHorizontal,
   FileSpreadsheet,
   X,
@@ -28,6 +29,7 @@ export const MobileNavBar: React.FC = () => {
     cases,
     requests,
     assets,
+    users,
     isAdmin,
     exportToExcel,
     currentSpreadsheetUrl,
@@ -61,7 +63,7 @@ export const MobileNavBar: React.FC = () => {
     };
   }, [isMoreOpen]);
 
-  const isMoreTabActive = ['dashboard', 'customers', 'done_work', 'requests', 'projects', 'engineer_profiles'].includes(activeTab);
+  const isMoreTabActive = ['ppm', 'customers', 'done_work', 'requests', 'projects', 'engineer_profiles'].includes(activeTab);
 
   return (
     <>
@@ -83,10 +85,10 @@ export const MobileNavBar: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <div>
                 <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white uppercase tracking-tight">
-                  All Modules & Quick Actions
+                  All Modules & Options
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Switch view or access Google cloud sync
+                  Switch to additional Sharq Medical modules
                 </p>
               </div>
               <button
@@ -99,33 +101,40 @@ export const MobileNavBar: React.FC = () => {
               </button>
             </div>
 
-            {/* Core Modules Grid with Comfortable Touch Targets */}
+            {/* Additional Modules Grid */}
             <div className="space-y-2">
               <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Workspace Sections
+                Additional Modules
               </div>
               <div className="grid grid-cols-2 gap-2.5">
-                {/* Dashboard / Home */}
+                {/* PPM Due */}
                 <button
                   type="button"
                   onClick={() => {
-                    setActiveTab('dashboard');
+                    setActiveTab('ppm');
                     setIsMoreOpen(false);
                   }}
                   className={`flex items-center space-x-3 p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[50px] ${
-                    activeTab === 'dashboard'
-                      ? 'bg-[#1D3557] border-[#1D3557] text-white font-bold shadow-sm'
+                    activeTab === 'ppm'
+                      ? 'bg-amber-600 border-amber-500 text-white font-bold shadow-sm'
                       : isDarkMode
                       ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-750'
                       : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  <div className={`p-2 rounded-lg ${activeTab === 'dashboard' ? 'bg-white/20' : 'bg-blue-500/15 text-blue-500'}`}>
-                    <LayoutDashboard className="w-5 h-5" />
+                  <div className={`p-2 rounded-lg ${activeTab === 'ppm' ? 'bg-white/20' : 'bg-amber-500/15 text-amber-500'}`}>
+                    <CalendarCheck className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold leading-tight">Dashboard</div>
-                    <div className="text-[10px] opacity-75">Overview & stats</div>
+                    <div className="text-xs font-bold leading-tight flex items-center gap-1.5">
+                      PPM Due
+                      {ppmDueCount > 0 && (
+                        <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                          {ppmDueCount}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] opacity-75">Maintenance schedule</div>
                   </div>
                 </button>
 
@@ -231,49 +240,77 @@ export const MobileNavBar: React.FC = () => {
                     <div className="text-[10px] opacity-75">Contracts & tenders</div>
                   </div>
                 </button>
-              </div>
-            </div>
 
-            {/* Cloud & Export Actions */}
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
-              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Cloud Sync & Google Drive
-              </div>
-              <div className="grid grid-cols-2 gap-2.5">
-                <a
-                  href={SHARQ_GOOGLE_DRIVE_FOLDER_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-center space-x-2 p-3 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded-xl text-blue-700 dark:text-blue-300 text-xs font-bold transition-colors min-h-[48px]"
-                >
-                  <ExternalLink className="w-4 h-4 text-blue-500 shrink-0" />
-                  <span>Sharq Drive</span>
-                </a>
-
-                <a
-                  href={currentSpreadsheetUrl || DEFAULT_SPREADSHEET_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-center space-x-2 p-3 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-bold transition-colors min-h-[48px]"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span>Google Sheet</span>
-                </a>
-              </div>
-
-              {isAdmin && (
-                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                {/* Engineer Profiles (Admin only) */}
+                {isAdmin && (
                   <button
                     type="button"
                     onClick={() => {
-                      exportToExcel();
+                      setActiveTab('engineer_profiles');
                       setIsMoreOpen(false);
                     }}
-                    className="flex items-center justify-center space-x-2 p-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer min-h-[48px]"
+                    className={`flex items-center space-x-3 p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[50px] ${
+                      activeTab === 'engineer_profiles'
+                        ? 'bg-blue-700 border-blue-600 text-white font-bold shadow-sm'
+                        : isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-750'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
                   >
-                    <Download className="w-4 h-4" />
-                    <span>Export Excel</span>
+                    <div className={`p-2 rounded-lg ${activeTab === 'engineer_profiles' ? 'bg-white/20' : 'bg-blue-500/15 text-blue-500'}`}>
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold leading-tight">Engineers</div>
+                      <div className="text-[10px] opacity-75">{users.filter((u) => u.role !== 'Admin').length || 10} Team Profiles</div>
+                    </div>
                   </button>
+                )}
+              </div>
+            </div>
+
+            {/* Cloud & Export Actions - Admin Only */}
+            {isAdmin && (
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+                <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Cloud Sync & Google Drive
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <a
+                    href={SHARQ_GOOGLE_DRIVE_FOLDER_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center space-x-2 p-3 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded-xl text-blue-700 dark:text-blue-300 text-xs font-bold transition-colors min-h-[48px]"
+                  >
+                    <ExternalLink className="w-4 h-4 text-blue-500 shrink-0" />
+                    <span>Sharq Drive</span>
+                  </a>
+
+                  <a
+                    href={currentSpreadsheetUrl || DEFAULT_SPREADSHEET_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center space-x-2 p-3 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-700 dark:text-emerald-300 text-xs font-bold transition-colors min-h-[48px]"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>Google Sheet</span>
+                  </a>
+                </div>
+
+                <div className={`grid ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'} gap-2.5 pt-1`}>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToExcel();
+                        setIsMoreOpen(false);
+                      }}
+                      className="flex items-center justify-center space-x-2 p-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer min-h-[48px]"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Export Excel</span>
+                    </button>
+                  )}
 
                   {!isGoogleConnected ? (
                     <button
@@ -294,21 +331,38 @@ export const MobileNavBar: React.FC = () => {
                     </div>
                   )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Persistent Bottom Bar for Mobile Devices - Ergonomic, 52px+ Touch Targets */}
+      {/* Persistent Bottom Bar for Mobile Devices - Fits 4 primary items + More on all screens */}
       <div
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 backdrop-blur-lg border-t px-2 py-1.5 flex items-center justify-around pb-[max(0.5rem,env(safe-area-inset-bottom))] transition-colors duration-200 ${
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 backdrop-blur-lg border-t px-1.5 py-1.5 flex items-center justify-around pb-[max(0.5rem,env(safe-area-inset-bottom))] transition-colors duration-200 ${
           isDarkMode
             ? 'bg-slate-950/95 border-slate-800 shadow-2xl'
             : 'bg-white/95 border-slate-200 shadow-xl'
         }`}
       >
-        {/* 1. My Desk (Primary field view for engineers) */}
+        {/* 1. Dashboard */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('dashboard')}
+          className={`relative flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'dashboard'
+              ? 'bg-[#FF5722] text-white shadow-sm font-bold'
+              : isDarkMode
+              ? 'text-slate-400 hover:text-slate-200 active:bg-slate-900'
+              : 'text-slate-600 hover:text-slate-900 active:bg-slate-100'
+          }`}
+          aria-label="Dashboard"
+        >
+          <LayoutDashboard className={`w-5 h-5 ${activeTab === 'dashboard' ? 'text-white' : 'text-[#FF5722]'}`} />
+          <span className="text-[10px] mt-1 font-bold tracking-tight">Dashboard</span>
+        </button>
+
+        {/* 2. My Desk */}
         <button
           type="button"
           onClick={() => setActiveTab('my_desk')}
@@ -336,7 +390,24 @@ export const MobileNavBar: React.FC = () => {
           <span className="text-[10px] mt-1 font-bold tracking-tight">My Desk</span>
         </button>
 
-        {/* 2. New Case (Quick ticket create) */}
+        {/* 3. Asset Details */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('add_asset')}
+          className={`flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'add_asset'
+              ? 'bg-indigo-600 text-white shadow-sm font-bold'
+              : isDarkMode
+              ? 'text-slate-400 hover:text-slate-200 active:bg-slate-900'
+              : 'text-slate-600 hover:text-slate-900 active:bg-slate-100'
+          }`}
+          aria-label="Asset Details"
+        >
+          <HardDriveUpload className={`w-5 h-5 ${activeTab === 'add_asset' ? 'text-white' : 'text-indigo-500'}`} />
+          <span className="text-[10px] mt-1 font-bold tracking-tight whitespace-nowrap">Asset Details</span>
+        </button>
+
+        {/* 4. New Case */}
         <button
           type="button"
           onClick={() => setActiveTab('new_case')}
@@ -364,52 +435,7 @@ export const MobileNavBar: React.FC = () => {
           <span className="text-[10px] mt-1 font-bold tracking-tight">New Case</span>
         </button>
 
-        {/* 3. PPM Due (Critical preventive maintenance tracker) */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('ppm')}
-          className={`relative flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'ppm'
-              ? 'bg-amber-600 text-white shadow-sm font-bold'
-              : isDarkMode
-              ? 'text-slate-400 hover:text-slate-200 active:bg-slate-900'
-              : 'text-slate-600 hover:text-slate-900 active:bg-slate-100'
-          }`}
-          aria-label="PPM Due"
-        >
-          <div className="relative">
-            <CalendarCheck className={`w-5 h-5 ${activeTab === 'ppm' ? 'text-white' : 'text-amber-500'}`} />
-            {ppmDueCount > 0 && (
-              <span
-                className={`absolute -top-1.5 -right-2 text-[9px] font-black rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shadow-xs ${
-                  activeTab === 'ppm' ? 'bg-white text-amber-800' : 'bg-amber-500 text-white'
-                }`}
-              >
-                {ppmDueCount}
-              </span>
-            )}
-          </div>
-          <span className="text-[10px] mt-1 font-bold tracking-tight">PPM Due</span>
-        </button>
-
-        {/* 4. Assets Directory */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('add_asset')}
-          className={`flex-1 flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'add_asset'
-              ? 'bg-indigo-600 text-white shadow-sm font-bold'
-              : isDarkMode
-              ? 'text-slate-400 hover:text-slate-200 active:bg-slate-900'
-              : 'text-slate-600 hover:text-slate-900 active:bg-slate-100'
-          }`}
-          aria-label="Assets"
-        >
-          <HardDriveUpload className={`w-5 h-5 ${activeTab === 'add_asset' ? 'text-white' : 'text-indigo-500'}`} />
-          <span className="text-[10px] mt-1 font-bold tracking-tight whitespace-nowrap">Assets</span>
-        </button>
-
-        {/* 5. More (Modules, Drive, Sheets) */}
+        {/* 5. More */}
         <button
           type="button"
           onClick={() => setIsMoreOpen(!isMoreOpen)}
@@ -424,9 +450,9 @@ export const MobileNavBar: React.FC = () => {
         >
           <div className="relative">
             <MoreHorizontal className={`w-5 h-5 ${isMoreTabActive || isMoreOpen ? 'text-white' : 'text-slate-500'}`} />
-            {pendingRequestsCount > 0 && (
+            {(pendingRequestsCount > 0 || ppmDueCount > 0) && (
               <span className="absolute -top-1.5 -right-2 bg-rose-500 text-white text-[9px] font-black rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shadow-xs">
-                {pendingRequestsCount}
+                {(pendingRequestsCount > 0 ? pendingRequestsCount : 0) + (ppmDueCount > 0 ? ppmDueCount : 0)}
               </span>
             )}
           </div>
@@ -436,4 +462,3 @@ export const MobileNavBar: React.FC = () => {
     </>
   );
 };
-

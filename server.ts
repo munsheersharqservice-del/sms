@@ -658,6 +658,24 @@ service@sharqmedicalsupply.qa`;
     try {
       const sheetId = (req.query.sheetId as string) || '1q20EnJj-uyT-iGOS-h3kCkAXP7HAiADDtIeNdOsIT9A';
 
+      const normalizeCell = (cell: any): string => {
+        if (!cell) return '';
+        if (cell.f) return String(cell.f).trim();
+        if (cell.v !== null && cell.v !== undefined) {
+          const val = String(cell.v).trim();
+          // Convert Date(YYYY,M,D) formatted by GVIZ
+          const dateMatch = val.match(/^Date\((\d+),(\d+),(\d+)(?:,\d+,\d+,\d+)?\)$/);
+          if (dateMatch) {
+            const y = dateMatch[1];
+            const m = String(parseInt(dateMatch[2], 10) + 1).padStart(2, '0');
+            const d = String(parseInt(dateMatch[3], 10)).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+          }
+          return val;
+        }
+        return '';
+      };
+
       const fetchTabGviz = async (
         sheetNames: string[],
         gid?: string
@@ -665,7 +683,7 @@ service@sharqmedicalsupply.qa`;
         // Try specific GID first if specified
         if (gid) {
           try {
-            const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}&headers=1`;
+            const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}&headers=1&_t=${Date.now()}`;
             const response = await fetch(gvizUrl);
             if (response.ok) {
               const text = await response.text();
@@ -674,9 +692,7 @@ service@sharqmedicalsupply.qa`;
                 const parsed = JSON.parse(jsonStr);
                 const rows = parsed?.table?.rows || [];
                 const parsedRows = rows.map((r: any) =>
-                  (r.c || []).map((cell: any) =>
-                    cell ? (cell.f || (cell.v !== null && cell.v !== undefined ? String(cell.v) : '')) : ''
-                  )
+                  (r.c || []).map((cell: any) => normalizeCell(cell))
                 );
                 if (parsedRows.length > 0) {
                   return { tab: `gid:${gid}`, rows: parsedRows };
@@ -691,7 +707,7 @@ service@sharqmedicalsupply.qa`;
         // Try sheet name aliases
         for (const sheetName of sheetNames) {
           try {
-            const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&headers=1`;
+            const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&headers=1&_t=${Date.now()}`;
             const response = await fetch(gvizUrl);
             if (!response.ok) continue;
             const text = await response.text();
@@ -700,9 +716,7 @@ service@sharqmedicalsupply.qa`;
             const parsed = JSON.parse(jsonStr);
             const rows = parsed?.table?.rows || [];
             const parsedRows = rows.map((r: any) =>
-              (r.c || []).map((cell: any) =>
-                cell ? (cell.f || (cell.v !== null && cell.v !== undefined ? String(cell.v) : '')) : ''
-              )
+              (r.c || []).map((cell: any) => normalizeCell(cell))
             );
             if (parsedRows.length > 0) {
               return { tab: sheetName, rows: parsedRows };
@@ -837,8 +851,19 @@ service@sharqmedicalsupply.qa`;
       };
 
       // 3. Process Equipment / Assets
+      const isAssetHeaderVal = (val: string) => {
+        const clean = (val || '').trim().toLowerCase();
+        return clean === 'serial number' || clean === 'serial #' || clean === 'serial no' || clean === 'serial' || clean === 's/n' || clean === 'sl no';
+      };
+
       const assets = eqRows
-        .filter((r) => r[0] && r[0].trim() && !r[0].toLowerCase().includes('serial number') && !r[0].toLowerCase().includes('serial #') && !r[0].toLowerCase().includes('serial'))
+        .filter((r) => {
+          if (!r || r.length === 0) return false;
+          const first = (r[0] || '').trim();
+          if (isAssetHeaderVal(first)) return false;
+          // Accept row if serial number exists OR customer + model exists
+          return first.length > 0 || ((r[1] || '').trim().length > 0 && (r[3] || '').trim().length > 0);
+        })
         .map((r, i) => {
           const rawDuration = parseInt(r[7], 10);
           const durationYears = isNaN(rawDuration) ? 2 : rawDuration;
@@ -848,10 +873,11 @@ service@sharqmedicalsupply.qa`;
           const rawRoom = r[11] || '';
           const custName = (r[1] || '').toUpperCase().trim();
           const finalSector = resolveCustomerSector(custName, r[12]);
+          const serial = (r[0] || '').toUpperCase().trim() || `EQ-${i + 1}`;
 
           return {
             id: `ast-${i + 1}`,
-            serialNumber: r[0].toUpperCase().trim(),
+            serialNumber: serial,
             customerName: custName,
             customerLocation: 'Doha, Qatar',
             manufacturer: (r[2] || '').toUpperCase().trim(),
@@ -865,6 +891,7 @@ service@sharqmedicalsupply.qa`;
             lastPpmDate: rawLastPpm,
             nextPpmDate: rawNextPpm,
             nextPpmDueDate: rawNextPpm,
+            roomNumber: rawRoom,
             roomWard: rawRoom,
             sector: finalSector,
             poNumber: r[13] || r[8] || '',
@@ -1536,17 +1563,21 @@ service@sharqmedicalsupply.qa`;
   // POST /api/assets/update: Live update an asset in server registry and Google Sheets
   app.post('/api/assets/update', async (req, res) => {
     try {
-      const { id, serialNumber, ...updates } = req.body;
+      const { id, serialNumber, originalSerialNumber, ...updates } = req.body;
       const targetSerial = (serialNumber || '').toString().trim().toUpperCase();
+      const origSerial = (originalSerialNumber || targetSerial).toString().trim().toUpperCase();
       const targetId = (id || '').toString().trim();
 
-      if (!targetSerial && !targetId) {
+      if (!targetSerial && !origSerial && !targetId) {
         return res.status(400).json({ success: false, error: 'Asset Serial Number or ID is required for update' });
       }
 
       let updatedAsset: any = null;
       const existingIndex = stagedAssets.findIndex(
-        (a) => (targetSerial && a.serialNumber === targetSerial) || (targetId && a.id === targetId)
+        (a) =>
+          (origSerial && a.serialNumber?.toUpperCase() === origSerial) ||
+          (targetSerial && a.serialNumber?.toUpperCase() === targetSerial) ||
+          (targetId && a.id === targetId)
       );
 
       if (existingIndex >= 0) {
@@ -1618,7 +1649,10 @@ service@sharqmedicalsupply.qa`;
               const checkData = await checkRes.json();
               const rows: string[][] = checkData.values || [];
               const rIdx = rows.findIndex(
-                (r) => r[0] && r[0].toString().trim().toUpperCase() === updatedAsset.serialNumber.trim().toUpperCase()
+                (r) => r[0] && (
+                  r[0].toString().trim().toUpperCase() === origSerial ||
+                  r[0].toString().trim().toUpperCase() === targetSerial
+                )
               );
               if (rIdx >= 0) {
                 const rNum = rIdx + 1;
@@ -1649,6 +1683,7 @@ service@sharqmedicalsupply.qa`;
                 });
                 sheetsSyncSuccess = appendRes.ok;
               }
+              break;
             }
           }
 
@@ -1673,7 +1708,12 @@ service@sharqmedicalsupply.qa`;
             if (ppmCheckRes.ok) {
               const ppmData = await ppmCheckRes.json();
               const ppmRows: string[][] = ppmData.values || [];
-              const pIdx = ppmRows.findIndex((r) => r[0] && r[0].toString().trim().toUpperCase() === updatedAsset.serialNumber.trim().toUpperCase());
+              const pIdx = ppmRows.findIndex(
+                (r) => r[0] && (
+                  r[0].toString().trim().toUpperCase() === origSerial ||
+                  r[0].toString().trim().toUpperCase() === targetSerial
+                )
+              );
               if (pIdx >= 0) {
                 const pNum = pIdx + 1;
                 await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/PPM_Schedule!A${pNum}:K${pNum}?valueInputOption=USER_ENTERED`, {

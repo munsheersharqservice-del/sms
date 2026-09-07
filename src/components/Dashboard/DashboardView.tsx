@@ -131,27 +131,31 @@ export const DashboardView: React.FC = () => {
               <h1 className="text-xs sm:text-sm md:text-base font-bold tracking-tight text-white uppercase leading-tight">
                 SERVICE OPERATIONS DASHBOARD
               </h1>
-              <span className="bg-[#FF5722] text-white text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs shrink-0 whitespace-nowrap">
-                {baseCases.length} Total Calls
-              </span>
+              {isAdmin && (
+                <span className="bg-[#FF5722] text-white text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs shrink-0 whitespace-nowrap">
+                  {baseCases.length} Total Calls
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Action button to create call */}
-        <div className="flex items-center space-x-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('new_case')}
-            className="px-3.5 py-2 bg-[#4CAF50] hover:bg-[#43a047] active:bg-[#388e3c] text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ NEW SERVICE CALL</span>
-          </button>
-        </div>
+        {/* Action button to create call - Admin only */}
+        {isAdmin && (
+          <div className="flex items-center space-x-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab('new_case')}
+              className="px-3.5 py-2 bg-[#4CAF50] hover:bg-[#43a047] active:bg-[#388e3c] text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ NEW SERVICE CALL</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {sheetsSyncStatus && (
+      {isAdmin && sheetsSyncStatus && (
         <div className="p-2 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-300 text-xs font-bold rounded-lg flex items-center space-x-2">
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
           <span>{sheetsSyncStatus}</span>
@@ -382,14 +386,16 @@ export const DashboardView: React.FC = () => {
               {currentCasesList.length === 0 ? (
                 <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-400 text-xs flex flex-col items-center justify-center space-y-3">
                   <p>No {selectedSection.toLowerCase()} service calls found.</p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('new_case')}
-                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg text-xs transition cursor-pointer shadow-xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Create New Call (#1000)</span>
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('new_case')}
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg text-xs transition cursor-pointer shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Create New Call (#1000)</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 currentCasesList.map((sc) => {

@@ -9,6 +9,7 @@ import {
   FolderGit2,
 } from 'lucide-react';
 import { AttachmentItem } from '../../types';
+import { useApp } from '../../context/AppContext';
 import { AttachmentViewerModal } from './AttachmentViewerModal';
 import {
   isAttachmentImage,
@@ -38,6 +39,7 @@ export const CaseAttachmentList: React.FC<CaseAttachmentListProps> = ({
   variant = 'compact',
   showDriveFolder = false,
 }) => {
+  const { isAdmin } = useApp();
   const [isExpanded, setIsExpanded] = useState(true); // Default to showing attached image directly
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeModalIndex, setActiveModalIndex] = useState(0);
@@ -98,8 +100,8 @@ export const CaseAttachmentList: React.FC<CaseAttachmentListProps> = ({
               <span>Download All ({displayedItems.length})</span>
             </button>
 
-            {/* Optional Drive Folder link only if explicitly enabled */}
-            {showDriveFolder && (
+            {/* Optional Drive Folder link only if admin and explicitly enabled */}
+            {isAdmin && showDriveFolder && (
               <a
                 href="https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?usp=drive_link"
                 target="_blank"

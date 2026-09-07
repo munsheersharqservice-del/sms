@@ -586,17 +586,19 @@ export const MyDeskView: React.FC = () => {
           </div>
         </div>
 
-        {/* Action button to create call */}
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('new_case')}
-            className="px-3.5 py-2 bg-[#4CAF50] hover:bg-[#43a047] active:bg-[#388e3c] text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ NEW SERVICE CALL</span>
-          </button>
-        </div>
+        {/* Action button to create call - Admin only */}
+        {isAdmin && (
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab('new_case')}
+              className="px-3.5 py-2 bg-[#4CAF50] hover:bg-[#43a047] active:bg-[#388e3c] text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ NEW SERVICE CALL</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* COMPACT FILTER & STATUS BAR */}

@@ -1592,8 +1592,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newAsset;
   };
 
-  const updateAsset = (id: string, assetData: Partial<Asset>) => {
-    const existing = assets.find((a) => a.id === id || (assetData.serialNumber && a.serialNumber.trim().toUpperCase() === assetData.serialNumber.trim().toUpperCase()));
+  const updateAsset = (id: string, assetData: Partial<Asset> & { originalSerialNumber?: string }) => {
+    const origSn = (assetData.originalSerialNumber || '').trim().toUpperCase();
+    const existing = assets.find(
+      (a) =>
+        (origSn && (a.serialNumber || '').trim().toUpperCase() === origSn) ||
+        a.id === id ||
+        (assetData.serialNumber && (a.serialNumber || '').trim().toUpperCase() === assetData.serialNumber.trim().toUpperCase())
+    );
     const updatedCust = assetData.customerName ? assetData.customerName.trim().toUpperCase() : (existing?.customerName || '');
     const finalNextPpm = assetData.nextPpmDate || (assetData as any)?.nextPpmDueDate || existing?.nextPpmDate || '';
     
@@ -1618,42 +1624,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
 
-    setAssets((prev) =>
-      prev.map((a) => (a.id === assetToSync.id || a.serialNumber.toUpperCase() === assetToSync.serialNumber.toUpperCase() ? assetToSync : a))
-    );
+    setAssets((prev) => {
+      const updatedList = prev.map((a) => {
+        const matchesOrig = origSn && (a.serialNumber || '').trim().toUpperCase() === origSn;
+        const matchesId = a.id === assetToSync.id || a.id === id;
+        const matchesNewSn = assetToSync.serialNumber && (a.serialNumber || '').trim().toUpperCase() === assetToSync.serialNumber.trim().toUpperCase();
+        return (matchesOrig || matchesId || matchesNewSn) ? assetToSync : a;
+      });
+      try {
+        localStorage.setItem('sharq_v3_assets', JSON.stringify(updatedList));
+      } catch {}
+      return updatedList;
+    });
 
     getAccessToken().then(async (token) => {
-        try {
-          const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
+      try {
+        const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
 
-          // 1. Post to Server Live Update Registry
-          fetch(`/api/assets/update?sheetId=${encodeURIComponent(activeSheetId)}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify(assetToSync),
-          }).catch((err) => console.warn('Server asset update live sync note:', err));
+        // 1. Post to Server Live Update Registry with originalSerialNumber for precise row matching
+        fetch(`/api/assets/update?sheetId=${encodeURIComponent(activeSheetId)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            ...assetToSync,
+            originalSerialNumber: origSn || existing?.serialNumber || assetToSync.serialNumber,
+          }),
+        }).catch((err) => console.warn('Server asset update live sync note:', err));
 
-          // 2. Direct Update to Google Sheets API
-          if (token) {
-            const updated = await updateAssetInSheet(token, activeSheetId, assetToSync);
-            if (updated) {
-              setSheetsSyncStatus(`Asset S/N "${assetToSync.serialNumber}" updated live in Excel & Google Sheet!`);
-              setTimeout(() => setSheetsSyncStatus(null), 4000);
-            } else {
-              setSheetsSyncStatus(`Asset S/N "${assetToSync.serialNumber}" updated locally (Google Sheet write pending)`);
-              setTimeout(() => setSheetsSyncStatus(null), 4000);
-            }
+        // 2. Direct Update to Google Sheets API
+        if (token) {
+          const updated = await updateAssetInSheet(token, activeSheetId, {
+            ...assetToSync,
+            originalSerialNumber: origSn || existing?.serialNumber || assetToSync.serialNumber,
+          } as any);
+          if (updated) {
+            setSheetsSyncStatus(`Asset S/N "${assetToSync.serialNumber}" updated live in Excel & Google Sheet!`);
+            setTimeout(() => setSheetsSyncStatus(null), 4000);
           } else {
-            setSheetsSyncStatus(`Asset S/N "${assetToSync.serialNumber}" updated locally. Connect Google Account to sync live with Sheet.`);
+            setSheetsSyncStatus(`Asset S/N "${assetToSync.serialNumber}" updated locally (Google Sheet write pending)`);
             setTimeout(() => setSheetsSyncStatus(null), 4000);
           }
-        } catch (e: any) {
-          console.warn('Asset update sync note:', e);
+        } else {
+          setSheetsSyncStatus(`Asset S/N "${assetToSync.serialNumber}" updated locally. Connect Google Account to sync live with Excel/Sheet.`);
+          setTimeout(() => setSheetsSyncStatus(null), 4000);
         }
-      });
+      } catch (e: any) {
+        console.warn('Asset update sync note:', e);
+      }
+    });
   };
 
   const deleteAsset = (id: string) => {
@@ -2357,53 +2378,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
 
-        // 3. Assets: Master Database is Single Source of Truth
-        if (Array.isArray(data.assets)) {
+        // 3. Assets: Master Google Sheet / Excel is Single Source of Truth
+        if (Array.isArray(data.assets) && data.assets.length > 0) {
           const remoteAssets = sanitizeAssetList(data.assets);
           setAssets((prevAssets) => {
-            // Retain any locally registered or master persistent assets that are not yet reflected in remote
-            const allLocalCandidates = [...INITIAL_ASSETS, ...prevAssets];
-            const seenSerials = new Set<string>();
-            const pendingLocals: Asset[] = [];
-            for (const la of allLocalCandidates) {
+            const remoteSerialSet = new Set(
+              remoteAssets.map((ra) => (ra.serialNumber || '').trim().toUpperCase()).filter(Boolean)
+            );
+            const remoteIdSet = new Set(
+              remoteAssets.map((ra) => ra.id).filter(Boolean)
+            );
+
+            // Retain locally staged assets that have not yet reached the remote sheet
+            const pendingLocals = prevAssets.filter((la) => {
               const serialKey = (la.serialNumber || '').trim().toUpperCase();
-              if (serialKey && seenSerials.has(serialKey)) continue;
-              if (serialKey) seenSerials.add(serialKey);
-              const inRemote = remoteAssets.some((ra) => 
-                (serialKey && (ra.serialNumber || '').trim().toUpperCase() === serialKey) ||
-                (ra.id && ra.id === la.id)
-              );
-              if (!inRemote) {
-                pendingLocals.push(la);
-              }
-            }
-            // Merge remote assets, preserving local PPM schedule edits and master PPM dates if set
+              return serialKey && !remoteSerialSet.has(serialKey) && (!la.id || !remoteIdSet.has(la.id));
+            });
+
+            // Master remote assets take precedence. If a user manually edited a row in Excel, those changes take effect!
             const mergedRemote = remoteAssets.map((ra) => {
               const serialKey = (ra.serialNumber || '').trim().toUpperCase();
               const matchedLocal = prevAssets.find(
                 (la) =>
                   (serialKey && (la.serialNumber || '').trim().toUpperCase() === serialKey) ||
                   (la.id && la.id === ra.id)
-              ) || INITIAL_ASSETS.find(
-                (ia) =>
-                  (serialKey && (ia.serialNumber || '').trim().toUpperCase() === serialKey) ||
-                  (ia.id && ia.id === ra.id)
               );
               if (matchedLocal) {
-                const finalNextPpm = matchedLocal.nextPpmDate || (matchedLocal as any).nextPpmDueDate || ra.nextPpmDate || (ra as any).nextPpmDueDate || '';
                 return {
-                  ...ra,
-                  ppmFrequency: (matchedLocal.ppmFrequency && matchedLocal.ppmFrequency !== 'None') ? matchedLocal.ppmFrequency : ra.ppmFrequency,
-                  ppmType: matchedLocal.ppmType || ra.ppmType,
-                  lastPpmDate: matchedLocal.lastPpmDate || ra.lastPpmDate,
-                  nextPpmDate: finalNextPpm,
-                  nextPpmDueDate: finalNextPpm,
-                  roomWard: matchedLocal.roomWard || ra.roomWard,
+                  ...matchedLocal,
+                  ...ra, // remote sheet fields take precedence for live manual edits in Excel
+                  // Retain rich local media if sheet didn't provide them
+                  accessories: (ra.accessories && ra.accessories.length > 0) ? ra.accessories : (matchedLocal.accessories || []),
+                  partsApplicable: (ra.partsApplicable && ra.partsApplicable.length > 0) ? ra.partsApplicable : (matchedLocal.partsApplicable || []),
+                  attachments: (ra.attachments && ra.attachments.length > 0) ? ra.attachments : (matchedLocal.attachments || []),
                 };
               }
               return ra;
             });
-            return sanitizeAssetList([...pendingLocals, ...mergedRemote]);
+
+            return sanitizeAssetList([...mergedRemote, ...pendingLocals]);
           });
         }
 

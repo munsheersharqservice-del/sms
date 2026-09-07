@@ -14,6 +14,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { AttachmentItem } from '../../types';
+import { useApp } from '../../context/AppContext';
 import {
   isAttachmentImage,
   getAttachmentDisplayUrl,
@@ -40,6 +41,7 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
   title = 'Case Attachment',
   caseTicket,
 }) => {
+  const { isAdmin } = useApp();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -171,7 +173,8 @@ export const AttachmentViewerModal: React.FC<AttachmentViewerModalProps> = ({
               <span className="hidden sm:inline">Download</span>
             </button>
 
-            {currentAttachment.driveLink && (
+            {/* Direct Drive link - Admin only */}
+            {isAdmin && currentAttachment.driveLink && (
               <a
                 href={currentAttachment.driveLink}
                 target="_blank"

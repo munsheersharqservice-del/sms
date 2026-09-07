@@ -486,6 +486,7 @@ export async function appendAssetToSheet(
     asset.installationReportLink || '',
   ];
 
+  const origSerial = ((asset as any).originalSerialNumber || asset.serialNumber || '').trim().toUpperCase();
   const targetSerial = (asset.serialNumber || '').trim().toUpperCase();
   let appendedOrUpdated = false;
 
@@ -503,7 +504,10 @@ export async function appendAssetToSheet(
       const colData = await getRes.json();
       const colRows: string[][] = colData.values || [];
       const rowIndex = colRows.findIndex(
-        (r) => r[0] && r[0].toString().trim().toUpperCase() === targetSerial
+        (r) => r[0] && (
+          r[0].toString().trim().toUpperCase() === origSerial ||
+          r[0].toString().trim().toUpperCase() === targetSerial
+        )
       );
 
       if (rowIndex >= 0) {

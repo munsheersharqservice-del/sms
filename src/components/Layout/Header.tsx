@@ -110,66 +110,70 @@ export const Header: React.FC = () => {
                 )}
               </button>
 
-              {/* Sharq Shared Google Drive Attachments Folder - FULL ACCESS TO ALL USERS & ENGINEERS */}
-              <a
-                href="https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?usp=drive_link"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-gradient-to-r from-sky-950 to-cyan-950 hover:from-sky-900 hover:to-cyan-900 border border-cyan-500/50 text-cyan-200 hover:text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs"
-                title="Open Sharq Medical Supply Shared Google Drive Attachments Folder (All Engineers Full Access)"
-              >
-                <FolderGit2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span className="hidden sm:inline text-[11px] font-bold">Drive Files</span>
-                <span className="sm:hidden text-[10px] font-bold">Drive</span>
-                <ExternalLink className="w-2.5 h-2.5 opacity-70 hidden md:inline" />
-              </a>
-
-              {/* Google Connection Status Pill / Button (For All Engineers) */}
-              {isGoogleConnected ? (
-                <button
-                  type="button"
-                  onClick={() => setIsSheetsModalOpen(true)}
-                  className="flex items-center space-x-1 px-2 py-1.5 bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-300 rounded-lg text-xs font-medium transition-colors"
-                  title={`Google Account Connected: ${googleUser?.email}. Click to view sync details.`}
+              {/* Sharq Shared Google Drive Attachments Folder - Admin only */}
+              {isAdmin && (
+                <a
+                  href="https://drive.google.com/drive/folders/1TEQdQtSWxcHvotY46c1RguUBUPP3iaP9?usp=drive_link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-gradient-to-r from-sky-950 to-cyan-950 hover:from-sky-900 hover:to-cyan-900 border border-cyan-500/50 text-cyan-200 hover:text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs"
+                  title="Open Sharq Medical Supply Shared Google Drive Attachments Folder"
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5 text-[#39B54A] shrink-0" />
-                  <span className="hidden lg:inline truncate max-w-[90px] text-[11px] font-mono">{googleUser?.email?.split('@')[0]}</span>
-                  <span className="lg:hidden text-[10px] font-bold">Connected</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={connectGoogle}
-                  className={`flex items-center space-x-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
-                    sheetsSyncStatus && (sheetsSyncStatus.includes('expired') || sheetsSyncStatus.includes('re-authorize'))
-                      ? 'bg-amber-500/25 hover:bg-amber-500/35 border-amber-400 text-amber-200 animate-pulse'
-                      : 'bg-blue-950/70 hover:bg-blue-900 border-blue-500/50 text-blue-300'
-                  }`}
-                  title="Sign in with Google to enable Drive uploads & Sheets sync"
-                >
-                  <Cloud className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                  <span className="text-[10px] sm:text-xs">
-                    {sheetsSyncStatus && (sheetsSyncStatus.includes('expired') || sheetsSyncStatus.includes('re-authorize'))
-                      ? 'Re-Connect'
-                      : 'Connect Google'}
-                  </span>
-                </button>
+                  <FolderGit2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <span className="hidden sm:inline text-[11px] font-bold">Drive Files</span>
+                  <span className="sm:hidden text-[10px] font-bold">Drive</span>
+                  <ExternalLink className="w-2.5 h-2.5 opacity-70 hidden md:inline" />
+                </a>
               )}
 
-              {/* Excel Download (.xlsx) */}
-              <button
-                type="button"
-                onClick={exportToExcel}
-                className="flex items-center space-x-1 px-2 sm:px-2.5 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/60 text-emerald-300 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-                title="Download full database as Excel (.xlsx) file"
-              >
-                <Download className="w-3.5 h-3.5 text-[#39B54A]" />
-                <span className="hidden sm:inline text-[11px]">Excel</span>
-              </button>
+              {/* Google Connection Status Pill / Button - Admin only */}
+              {isAdmin && (
+                isGoogleConnected ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsSheetsModalOpen(true)}
+                    className="flex items-center space-x-1 px-2 py-1.5 bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-300 rounded-lg text-xs font-medium transition-colors"
+                    title={`Google Account Connected: ${googleUser?.email}. Click to view sync details.`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#39B54A] shrink-0" />
+                    <span className="hidden lg:inline truncate max-w-[90px] text-[11px] font-mono">{googleUser?.email?.split('@')[0]}</span>
+                    <span className="lg:hidden text-[10px] font-bold">Connected</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={connectGoogle}
+                    className={`flex items-center space-x-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                      sheetsSyncStatus && (sheetsSyncStatus.includes('expired') || sheetsSyncStatus.includes('re-authorize'))
+                        ? 'bg-amber-500/25 hover:bg-amber-500/35 border-amber-400 text-amber-200 animate-pulse'
+                        : 'bg-blue-950/70 hover:bg-blue-900 border-blue-500/50 text-blue-300'
+                    }`}
+                    title="Sign in with Google to enable Drive uploads & Sheets sync"
+                  >
+                    <Cloud className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <span className="text-[10px] sm:text-xs">
+                      {sheetsSyncStatus && (sheetsSyncStatus.includes('expired') || sheetsSyncStatus.includes('re-authorize'))
+                        ? 'Re-Connect'
+                        : 'Connect Google'}
+                    </span>
+                  </button>
+                )
+              )}
 
-              {/* ADMIN ACTIONS: Google Sheets Sync & Clear Data */}
+              {/* ADMIN ACTIONS: Excel Download, Google Sheets Sync & Clear Data */}
               {isAdmin && (
                 <>
+                  {/* Excel Download (.xlsx) */}
+                  <button
+                    type="button"
+                    onClick={exportToExcel}
+                    className="flex items-center space-x-1 px-2 sm:px-2.5 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/60 text-emerald-300 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                    title="Download full database as Excel (.xlsx) file"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#39B54A]" />
+                    <span className="hidden sm:inline text-[11px]">Excel</span>
+                  </button>
+
                   {/* Google Sheets Sync Modal Button */}
                   <button
                     type="button"

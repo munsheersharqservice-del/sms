@@ -239,96 +239,100 @@ export const CustomersView: React.FC = () => {
         </button>
       </div>
 
-      {/* Google Sheet Live Sync Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center space-x-3 min-w-0">
-          <div className="p-2.5 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200 shrink-0">
-            <FileSpreadsheet className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-black text-slate-800 uppercase tracking-wide">
-                Google Sheets Live Sync
-              </span>
-              {isGoogleConnected ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1 animate-pulse" />
-                  Live Connected
-                </span>
-              ) : (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mr-1" />
-                  Sign-In Needed for Direct Write
-                </span>
-              )}
+      {/* Google Sheet Live Sync Bar - Admin only */}
+      {isAdmin && (
+        <>
+          <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className="p-2.5 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200 shrink-0">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wide">
+                    Google Sheets Live Sync
+                  </span>
+                  {isGoogleConnected ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1 animate-pulse" />
+                      Live Connected
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mr-1" />
+                      Sign-In Needed for Direct Write
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                  Active Master Sheet:{' '}
+                  <a
+                    href={currentSpreadsheetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-emerald-700 hover:underline inline-flex items-center space-x-1"
+                    title="Open active spreadsheet in Google Sheets"
+                  >
+                    <span>{currentSpreadsheetId.slice(0, 14)}...</span>
+                    <ExternalLink className="w-3 h-3 ml-0.5" />
+                  </a>
+                </p>
+              </div>
             </div>
-            <p className="text-[11px] text-slate-500 truncate mt-0.5">
-              Active Master Sheet:{' '}
+
+            {/* Sync Actions */}
+            <div className="flex items-center space-x-2 shrink-0">
+              {!isGoogleConnected && (
+                <button
+                  type="button"
+                  onClick={() => connectGoogle()}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs flex items-center space-x-1"
+                >
+                  <span>Connect Google</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleSyncAllCustomersToSheet}
+                disabled={isSyncingAll || isSyncingSheets}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                title="Push all customer records directly to Google Sheet"
+              >
+                <UploadCloud className={`w-3.5 h-3.5 ${isSyncingAll ? 'animate-bounce' : ''}`} />
+                <span>{isSyncingAll ? 'Syncing...' : 'Sync Customers to Sheet'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSheetsModalOpen(true)}
+                className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                title="Google Sheets & Webhook Settings"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Sync Feedback Message */}
+          {(syncFeedback || sheetsSyncStatus) && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-semibold flex items-center justify-between animate-in fade-in">
+              <div className="flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{syncFeedback || sheetsSyncStatus}</span>
+              </div>
               <a
                 href={currentSpreadsheetUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-emerald-700 hover:underline inline-flex items-center space-x-1"
-                title="Open active spreadsheet in Google Sheets"
+                className="text-[11px] font-bold text-emerald-800 hover:underline inline-flex items-center space-x-0.5 ml-2"
               >
-                <span>{currentSpreadsheetId.slice(0, 14)}...</span>
-                <ExternalLink className="w-3 h-3 ml-0.5" />
+                <span>Open Sheet</span>
+                <ExternalLink className="w-3 h-3" />
               </a>
-            </p>
-          </div>
-        </div>
-
-        {/* Sync Actions */}
-        <div className="flex items-center space-x-2 shrink-0">
-          {!isGoogleConnected && (
-            <button
-              type="button"
-              onClick={() => connectGoogle()}
-              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs flex items-center space-x-1"
-            >
-              <span>Connect Google</span>
-            </button>
+            </div>
           )}
-
-          <button
-            type="button"
-            onClick={handleSyncAllCustomersToSheet}
-            disabled={isSyncingAll || isSyncingSheets}
-            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
-            title="Push all customer records directly to Google Sheet"
-          >
-            <UploadCloud className={`w-3.5 h-3.5 ${isSyncingAll ? 'animate-bounce' : ''}`} />
-            <span>{isSyncingAll ? 'Syncing...' : 'Sync Customers to Sheet'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsSheetsModalOpen(true)}
-            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-            title="Google Sheets & Webhook Settings"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Sync Feedback Message */}
-      {(syncFeedback || sheetsSyncStatus) && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-semibold flex items-center justify-between animate-in fade-in">
-          <div className="flex items-center space-x-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{syncFeedback || sheetsSyncStatus}</span>
-          </div>
-          <a
-            href={currentSpreadsheetUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[11px] font-bold text-emerald-800 hover:underline inline-flex items-center space-x-0.5 ml-2"
-          >
-            <span>Open Sheet</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        </div>
+        </>
       )}
 
       {/* Filter and Search Bar */}
