@@ -373,4 +373,50 @@ export const PERSISTENT_MASTER_CASES: ServiceCase[] = [];
 
 export const PERSISTENT_MASTER_DONE_WORK: DoneWorkLog[] = [];
 
-export const PERSISTENT_MASTER_CUSTOMERS: Customer[] = [];
+export const PERSISTENT_MASTER_CUSTOMERS: Customer[] = [
+  {
+    id: 'cust-al-wakrah-hospital',
+    name: 'AL WAKRAH HOSPITAL',
+    location: 'Al Wakrah, Qatar',
+    sector: 'Government',
+    department: 'Medical',
+    contactPerson: 'Biomedical Department',
+    phone: '+974 4011 4444',
+  },
+  {
+    id: 'cust-hamad-dental-center',
+    name: 'HAMAD DENTAL CENTER',
+    location: 'Doha, Qatar',
+    sector: 'Government',
+    department: 'Dental',
+    contactPerson: 'Dental Engineering Dept',
+    phone: '+974 4439 2222',
+  },
+  {
+    id: 'cust-al-waibah-palace',
+    name: 'AL WAIBAH PALACE',
+    location: 'Doha, Qatar',
+    sector: 'Private',
+    department: 'Medical',
+    contactPerson: 'Facility Manager',
+    phone: '+974 4400 0000',
+  },
+  {
+    id: 'cust-hmdac',
+    name: 'HMDAC',
+    location: 'Doha, Qatar',
+    sector: 'Government',
+    department: 'Dental',
+    contactPerson: 'Biomedical Team',
+    phone: '+974 4439 1111',
+  },
+  {
+    id: 'cust-aisha-hospital',
+    name: 'AISHA HOSPITAL',
+    location: 'Doha, Qatar',
+    sector: 'Private',
+    department: 'Dental',
+    contactPerson: 'Dr. Aisha Clinic',
+    phone: '+974 4455 6677',
+  },
+];

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   Building,
@@ -14,7 +14,8 @@ import {
   MapPin,
   Sparkles,
 } from 'lucide-react';
-import { Asset, Customer } from '../../types';
+import { Asset, Customer, resolveCustomerSector } from '../../types';
+import { isAssetForCustomer } from '../../utils/attachmentHelper';
 
 interface MasterCustomerAssetSelectorProps {
   selectedCustomerName: string;
@@ -146,61 +147,81 @@ export const MasterCustomerAssetSelector: React.FC<MasterCustomerAssetSelectorPr
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Union of registered customers + any customers associated with registered assets
+  const availableCustomers = useMemo(() => {
+    const map = new Map<string, Customer>();
+    (customers || []).forEach((c) => {
+      if (c && c.name) {
+        map.set(c.name.trim().toUpperCase(), c);
+      }
+    });
+    (assets || []).forEach((a) => {
+      const aCust = (a.customerName || '').trim().toUpperCase();
+      if (aCust && !map.has(aCust)) {
+        map.set(aCust, {
+          id: `cust-auto-${aCust.replace(/[^A-Z0-9]/g, '_').toLowerCase()}`,
+          name: aCust,
+          location: a.customerLocation || 'Doha, Qatar',
+          sector: a.sector || resolveCustomerSector(aCust),
+          department: a.department || 'Medical',
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [customers, assets]);
+
   // Filtered Customers from database
-  const filteredCustomers = customers.filter((c) => {
-    const q = customerInput.toLowerCase();
+  const filteredCustomers = availableCustomers.filter((c) => {
+    const q = (customerInput || '').toLowerCase().trim();
     if (!q) return true;
     return (
-      c.name.toLowerCase().includes(q) ||
+      (c.name || '').toLowerCase().includes(q) ||
       (c.location && c.location.toLowerCase().includes(q)) ||
       (c.contactPerson && c.contactPerson.toLowerCase().includes(q))
     );
   });
-
-  // Check if asset belongs to customer
-  const isAssetForCustomer = (a: Asset, custName: string) => {
-    if (!custName || !custName.trim()) return false;
-    const c = custName.toLowerCase().trim();
-    const ac = (a.customerName || '').toLowerCase().trim();
-    if (ac === c) return true;
-    if (ac.includes(c) || c.includes(ac)) return true;
-    const custTokens = c.replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter((t) => t.length > 2);
-    return custTokens.length > 0 && custTokens.some((tok) => ac.includes(tok));
-  };
 
   // Only assets under the selected customer are shown - never show all assets!
   const customerMatchedAssets = selectedCustomerName
     ? assets.filter((a) => isAssetForCustomer(a, selectedCustomerName))
     : [];
 
-  const filteredAssets = selectedCustomerName
-    ? customerMatchedAssets.filter((a) => {
-        const q = assetSearchInput.toLowerCase().trim();
-        if (!q) return true;
-        return (
-          a.serialNumber.toLowerCase().includes(q) ||
-          a.model.toLowerCase().includes(q) ||
-          a.manufacturer.toLowerCase().includes(q) ||
-          (a.assetNumber && a.assetNumber.toLowerCase().includes(q))
-        );
-      })
+  const isBrowsingAllCustomerAssets =
+    !assetSearchInput.trim() ||
+    (selectedAsset &&
+      (selectedAsset.serialNumber || '').trim().toUpperCase() === assetSearchInput.trim().toUpperCase());
+
+  const displayedDropdownAssets = selectedCustomerName
+    ? isBrowsingAllCustomerAssets
+      ? customerMatchedAssets
+      : customerMatchedAssets.filter((a) => {
+          const q = assetSearchInput.toLowerCase().trim();
+          return (
+            (a.serialNumber || '').toLowerCase().includes(q) ||
+            (a.model || '').toLowerCase().includes(q) ||
+            (a.manufacturer || '').toLowerCase().includes(q) ||
+            (a.assetNumber ? String(a.assetNumber).toLowerCase().includes(q) : false)
+          );
+        })
     : [];
+
+  const filteredAssets = displayedDropdownAssets;
 
   // Count of assets for selected customer
   const customerAssetsCount = customerMatchedAssets.length;
 
   // Selected customer object from master database
-  const currentCustomerObj = customers.find(
-    (c) => c.name.toLowerCase() === selectedCustomerName.toLowerCase()
+  const currentCustomerObj = availableCustomers.find(
+    (c) => (c.name || '').toLowerCase() === (selectedCustomerName || '').toLowerCase()
   );
 
   const handleSelectCustomer = (custName: string) => {
-    const trimmed = custName.trim();
+    const trimmed = (custName || '').trim().toUpperCase();
     setCustomerInput(trimmed);
     setShowCustomerDropdown(false);
 
-    const found = customers.find(
-      (c) => c.name.toLowerCase() === trimmed.toLowerCase()
+    const found = availableCustomers.find(
+      (c) => (c.name || '').toLowerCase() === trimmed.toLowerCase()
     );
 
     onCustomerSelect(trimmed, found || null);
@@ -227,14 +248,14 @@ export const MasterCustomerAssetSelector: React.FC<MasterCustomerAssetSelectorPr
 
   const handleSelectAsset = (ast: Asset) => {
     onAssetSelect(ast);
-    setAssetSearchInput(ast.serialNumber);
+    setAssetSearchInput(ast.serialNumber || '');
     setShowAssetDropdown(false);
 
     // Auto-populate Customer from Asset's customerName in database
     if (ast.customerName) {
       setCustomerInput(ast.customerName);
-      const foundCust = customers.find(
-        (c) => c.name.toLowerCase() === ast.customerName.toLowerCase()
+      const foundCust = availableCustomers.find(
+        (c) => (c.name || '').toLowerCase() === (ast.customerName || '').toLowerCase()
       );
       onCustomerSelect(ast.customerName, foundCust || null);
 
@@ -295,7 +316,14 @@ export const MasterCustomerAssetSelector: React.FC<MasterCustomerAssetSelectorPr
       badge: 'bg-slate-100 text-slate-800 border-slate-200',
       highlight: 'hover:bg-slate-100',
     },
-  }[accentColor];
+  }[accentColor] || {
+    ring: 'focus:ring-orange-500',
+    border: 'border-orange-200',
+    bgLight: 'bg-orange-50/50',
+    icon: 'text-orange-600',
+    badge: 'bg-orange-100 text-orange-800 border-orange-200',
+    highlight: 'hover:bg-orange-50',
+  };
 
   return (
     <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${className}`}>
@@ -464,6 +492,53 @@ export const MasterCustomerAssetSelector: React.FC<MasterCustomerAssetSelectorPr
           </div>
         </div>
 
+        {/* Quick Pick Equipment Dropdown from Master Database */}
+        <div className="space-y-1.5 mb-2.5">
+          <div className="flex items-center justify-between text-[11px] text-slate-700 font-bold">
+            <span>
+              {selectedCustomerName
+                ? `Equipment under Customer (${customerMatchedAssets.length} Available):`
+                : 'Select Master Customer to View Equipment:'}
+            </span>
+            {selectedCustomerName && (
+              <span className="text-orange-600 font-mono text-[10px] truncate max-w-[200px]">
+                {selectedCustomerName}
+              </span>
+            )}
+          </div>
+          <select
+            value={selectedAsset?.id || ''}
+            disabled={!selectedCustomerName || customerMatchedAssets.length === 0}
+            onChange={(e) => {
+              const ast = assets.find((a) => a.id === e.target.value);
+              if (ast) handleSelectAsset(ast);
+              else handleClearAsset();
+            }}
+            className={`w-full bg-white text-slate-900 border p-2.5 rounded-lg text-xs font-bold font-mono focus:ring-2 ${themeClasses.ring} outline-none transition ${
+              !selectedCustomerName
+                ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                : customerMatchedAssets.length === 0
+                ? 'border-amber-200 bg-amber-50/50 text-amber-800'
+                : 'border-slate-300 hover:border-orange-400 cursor-pointer'
+            }`}
+          >
+            {!selectedCustomerName ? (
+              <option value="">-- Please Select Master Customer First --</option>
+            ) : customerMatchedAssets.length === 0 ? (
+              <option value="">-- No Equipment Registered for {selectedCustomerName} --</option>
+            ) : (
+              <>
+                <option value="">-- Choose Equipment for {selectedCustomerName} ({customerMatchedAssets.length} Assets Registered) --</option>
+                {customerMatchedAssets.map((ast) => (
+                  <option key={`mcas-opt-${ast.id}`} value={ast.id}>
+                    {ast.serialNumber} | {ast.model} ({ast.manufacturer || ast.department})
+                  </option>
+                ))}
+              </>
+            )}
+          </select>
+        </div>
+
         <div className="relative">
           <input
             type="text"
@@ -510,9 +585,21 @@ export const MasterCustomerAssetSelector: React.FC<MasterCustomerAssetSelectorPr
             <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-500 uppercase flex justify-between items-center">
               <span>
                 {selectedCustomerName
-                  ? `${selectedCustomerName} Assets (${filteredAssets.length})`
+                  ? `${selectedCustomerName} Assets (${filteredAssets.length} of ${customerMatchedAssets.length})`
                   : 'Select Customer First'}
               </span>
+              {selectedCustomerName && filteredAssets.length < customerMatchedAssets.length && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssetSearchInput('');
+                    setShowAssetDropdown(true);
+                  }}
+                  className="text-[9px] text-orange-600 font-bold hover:underline cursor-pointer"
+                >
+                  Show All ({customerMatchedAssets.length})
+                </button>
+              )}
             </div>
             {!selectedCustomerName ? (
               <div className="p-4 text-center">

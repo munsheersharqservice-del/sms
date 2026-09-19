@@ -745,7 +745,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedAssetForCase, setSelectedAssetForCase] = useState<Asset | null>(null);
 
   // 2. Master Customers (Single Source of Truth: Live Database / Excel)
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>(() => {
+    try {
+      const saved = localStorage.getItem('sharq_v3_customers');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return sanitizeCustomerList(parsed);
+        }
+      }
+    } catch {}
+    return sanitizeCustomerList(INITIAL_CUSTOMERS);
+  });
 
   // 3. Master Manufacturers & Models (Single Source of Truth: Live Database / Excel)
   const [manufacturerModels, setManufacturerModels] = useState<ManufacturerModel[]>([]);
@@ -845,6 +856,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch {}
     }
   }, [assets]);
+
+  useEffect(() => {
+    if (customers && customers.length > 0) {
+      try {
+        localStorage.setItem('sharq_v3_customers', JSON.stringify(customers));
+      } catch {}
+    }
+  }, [customers]);
 
   // 9. Requisitions (Single Source of Truth: Live Database / Excel)
   const [requests, setRequests] = useState<RequestItem[]>([]);

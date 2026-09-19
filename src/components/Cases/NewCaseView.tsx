@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   Truck,
@@ -25,10 +25,11 @@ import {
   User as UserIcon,
   ShieldCheck,
 } from 'lucide-react';
-import { Department, WorkClassification, WarrantyStatus, Asset, AttachmentItem, resolveCustomerSector, isGovernmentCustomer } from '../../types';
+import { Department, WorkClassification, WarrantyStatus, Asset, Customer, AttachmentItem, resolveCustomerSector, isGovernmentCustomer } from '../../types';
 import { DriveAttachmentUploader } from '../Common/DriveAttachmentUploader';
 import { SHARQ_GOOGLE_DRIVE_FOLDER_URL, uploadAttachmentToGoogleDrive } from '../../utils/googleDrive';
 import { DEFAULT_SPREADSHEET_URL } from '../../utils/googleSheets';
+import { isAssetForCustomer } from '../../utils/attachmentHelper';
 
 export const NewCaseView: React.FC = () => {
   const {
@@ -137,47 +138,74 @@ export const NewCaseView: React.FC = () => {
     ])
   );
 
-  // Customer Filter list
-  const filteredCustomers = customers.filter((c) =>
-    c.name.toLowerCase().includes(customerInput.toLowerCase())
-  );
+  // Union of registered customers + any customers associated with registered assets
+  const availableCustomers = useMemo(() => {
+    const map = new Map<string, Customer>();
+    (customers || []).forEach((c) => {
+      if (c && c.name) {
+        map.set(c.name.trim().toUpperCase(), c);
+      }
+    });
+    (assets || []).forEach((a) => {
+      const aCust = (a.customerName || '').trim().toUpperCase();
+      if (aCust && !map.has(aCust)) {
+        map.set(aCust, {
+          id: `cust-auto-${aCust.replace(/[^A-Z0-9]/g, '_').toLowerCase()}`,
+          name: aCust,
+          location: a.customerLocation || 'Doha, Qatar',
+          sector: a.sector || resolveCustomerSector(aCust),
+          department: a.department || 'Medical',
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [customers, assets]);
 
-  // Check if asset belongs to customer
-  const isAssetForCustomer = (a: Asset, custName: string) => {
-    if (!custName || !custName.trim()) return false;
-    const c = custName.toLowerCase().trim();
-    const ac = (a.customerName || '').toLowerCase().trim();
-    if (ac === c) return true;
-    if (ac.includes(c) || c.includes(ac)) return true;
-    const custTokens = c.replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter((t) => t.length > 2);
-    return custTokens.length > 0 && custTokens.some((tok) => ac.includes(tok));
-  };
+  // Customer Filter list
+  const filteredCustomers = availableCustomers.filter((c) => {
+    const q = (customerInput || '').toLowerCase().trim();
+    if (!q) return true;
+    return (
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.location && c.location.toLowerCase().includes(q)) ||
+      (c.contactPerson && c.contactPerson.toLowerCase().includes(q))
+    );
+  });
 
   // Only assets under the selected customer are shown - never show all assets!
   const customerMatchedAssets = selectedCustomer
     ? assets.filter((a) => isAssetForCustomer(a, selectedCustomer))
     : [];
 
-  const filteredAssets = selectedCustomer
-    ? customerMatchedAssets.filter((a) => {
-        const q = assetSearchInput.toLowerCase().trim();
-        if (!q) return true;
-        return (
-          a.serialNumber.toLowerCase().includes(q) ||
-          a.model.toLowerCase().includes(q) ||
-          a.manufacturer.toLowerCase().includes(q) ||
-          (a.assetNumber && a.assetNumber.toLowerCase().includes(q))
-        );
-      })
+  const isBrowsingAllCustomerAssets =
+    !assetSearchInput.trim() ||
+    (selectedAsset &&
+      (selectedAsset.serialNumber || '').trim().toUpperCase() === assetSearchInput.trim().toUpperCase());
+
+  const displayedDropdownAssets = selectedCustomer
+    ? isBrowsingAllCustomerAssets
+      ? customerMatchedAssets
+      : customerMatchedAssets.filter((a) => {
+          const q = assetSearchInput.toLowerCase().trim();
+          return (
+            (a.serialNumber || '').toLowerCase().includes(q) ||
+            (a.model || '').toLowerCase().includes(q) ||
+            (a.manufacturer || '').toLowerCase().includes(q) ||
+            (a.assetNumber ? String(a.assetNumber).toLowerCase().includes(q) : false)
+          );
+        })
     : [];
 
+  const filteredAssets = displayedDropdownAssets;
+
   const handleSelectCustomer = (custName: string) => {
-    setSelectedCustomer(custName);
-    setCustomerInput(custName);
+    const trimmed = (custName || '').trim().toUpperCase();
+    setSelectedCustomer(trimmed);
+    setCustomerInput(trimmed);
     setShowCustomerDropdown(false);
     setShowAssetDropdown(true);
 
-    const found = customers.find((c) => c.name.toLowerCase() === custName.toLowerCase());
+    const found = availableCustomers.find((c) => (c.name || '').toLowerCase() === trimmed.toLowerCase());
     if (found) {
       if (found.contactPerson) setContactPerson(found.contactPerson);
       if (found.phone) setContactPhone(found.phone);
@@ -185,7 +213,7 @@ export const NewCaseView: React.FC = () => {
     }
 
     // Strictly enforce: if current asset does not belong to the selected customer, clear it!
-    if (selectedAsset && !isAssetForCustomer(selectedAsset, custName)) {
+    if (selectedAsset && !isAssetForCustomer(selectedAsset, trimmed)) {
       setSelectedAsset(null);
       setAssetSearchInput('');
     }
@@ -524,7 +552,7 @@ export const NewCaseView: React.FC = () => {
                       </span>
                     )}
                     <span className="text-blue-700 font-semibold">
-                      {assets.filter((a) => a.customerName.toLowerCase().includes(selectedCustomer.toLowerCase())).length} Assets Registered
+                      {customerMatchedAssets.length} Assets Registered
                     </span>
                   </div>
                 )}
@@ -560,7 +588,7 @@ export const NewCaseView: React.FC = () => {
                   <div className="flex items-center justify-between text-[11px] text-slate-600 font-bold">
                     <span>
                       {selectedCustomer
-                        ? `Customer Assets (${filteredAssets.length} Available):`
+                        ? `Customer Assets (${customerMatchedAssets.length} Available):`
                         : 'Select Customer First to View Assets:'}
                     </span>
                     {selectedCustomer && (
@@ -591,10 +619,10 @@ export const NewCaseView: React.FC = () => {
                       <option value="">-- No Equipment Registered for {selectedCustomer} --</option>
                     ) : (
                       <>
-                        <option value="">-- Choose Equipment for {selectedCustomer} ({filteredAssets.length}) --</option>
-                        {filteredAssets.map((ast) => (
+                        <option value="">-- Choose Equipment for {selectedCustomer} ({customerMatchedAssets.length} Assets Registered) --</option>
+                        {customerMatchedAssets.map((ast) => (
                           <option key={`ast-opt-${ast.id}`} value={ast.id}>
-                            {ast.serialNumber} | {ast.model} ({ast.manufacturer})
+                            {ast.serialNumber} | {ast.model} ({ast.manufacturer || ast.department})
                           </option>
                         ))}
                       </>

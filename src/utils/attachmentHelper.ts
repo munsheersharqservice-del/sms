@@ -354,5 +354,145 @@ export function buildCombinedDoneWorkAttachments(
     registerItem(matchedCase.serviceReportDriveLink, 'Close Case', reportName);
   }
 
+  // 5. Process Scanned Report from matchedCase (Close Case)
+  if (matchedCase?.scannedReportDriveLink && !matchedCase.scannedReportDriveLink.includes('/folders/')) {
+    registerItem(matchedCase.scannedReportDriveLink, 'Close Case', `Scanned_Report_${log.ticketNumber || 'Closed'}.pdf`);
+  }
+  if (matchedCase?.scannedReportAttachment) {
+    registerItem(matchedCase.scannedReportAttachment as any, 'Close Case', `Scanned_Report_${log.ticketNumber || 'Closed'}`);
+  }
+
+  // 6. Process Service Report Attachment from matchedCase (Close Case)
+  if (matchedCase?.serviceReportAttachment && !matchedCase.serviceReportAttachment.includes('/folders/')) {
+    registerItem(matchedCase.serviceReportAttachment, 'Close Case', `Service_Report_${log.ticketNumber || 'Closed'}`);
+  }
+
+  // 7. Process Invoice file if any (Close Case)
+  if (matchedCase?.invoiceFileUrl && !matchedCase.invoiceFileUrl.includes('/folders/')) {
+    registerItem(matchedCase.invoiceFileUrl, 'Close Case', `Invoice_${matchedCase.invoiceNumber || log.ticketNumber || 'File'}`);
+  }
+
   return result;
+}
+
+/**
+ * Accurately finds the corresponding ServiceCase for a given DoneWorkLog.
+ * Matches by caseId, ticketNumber, caseNumber, numeric IDs, or customer + serial.
+ */
+export function findMatchingCase(
+  log: Partial<DoneWorkLog> | undefined | null,
+  cases: ServiceCase[]
+): ServiceCase | undefined {
+  if (!log || !cases || cases.length === 0) return undefined;
+
+  const logTk = (log.ticketNumber || '').toString().trim().toUpperCase().replace(/^#/, '');
+  const logCaseNum = (log.caseNumber || '').toString().trim().toUpperCase().replace(/^#/, '');
+  const logId = (log.caseId || log.id || '').toString().trim();
+  const logSerial = (log.serialNumber || '').toString().trim().toUpperCase();
+  const logCustomer = (log.customerName || '').toString().trim().toUpperCase();
+
+  return cases.find((c) => {
+    // 1. Direct case ID match
+    if (log.caseId && c.id === log.caseId) return true;
+    if (logId && (c.id === logId || c.caseNumber === logId || c.ticketNumber === logId)) return true;
+
+    // 2. Ticket / case number match
+    const cTk = (c.ticketNumber || '').toString().trim().toUpperCase().replace(/^#/, '');
+    const cCaseNum = (c.caseNumber || '').toString().trim().toUpperCase().replace(/^#/, '');
+
+    if (logTk && (cTk === logTk || cCaseNum === logTk)) return true;
+    if (logCaseNum && (cCaseNum === logCaseNum || cTk === logCaseNum)) return true;
+
+    // 3. Numeric digits match (e.g. "1001" vs "#1001" vs "TKT-1001")
+    const logDigits = logTk.replace(/\D/g, '') || logCaseNum.replace(/\D/g, '');
+    const cDigits = cTk.replace(/\D/g, '') || cCaseNum.replace(/\D/g, '');
+    if (logDigits && cDigits && logDigits === cDigits) return true;
+
+    // 4. Equipment serial + Customer match (if ticket format differs)
+    if (
+      logSerial &&
+      logSerial !== 'N/A' &&
+      logCustomer &&
+      c.serialNumber &&
+      c.serialNumber.trim().toUpperCase() === logSerial &&
+      c.customerName &&
+      c.customerName.trim().toUpperCase() === logCustomer
+    ) {
+      if (
+        log.dateCompleted &&
+        (c.closeDate === log.dateCompleted ||
+          c.scheduledDate === log.dateCompleted ||
+          c.createdAt?.startsWith(log.dateCompleted))
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+}
+
+/**
+ * Checks if an Asset belongs to a given customer name with robust matching.
+ */
+export function isAssetForCustomer(
+  a: { customerName?: string; customerLocation?: string } | null | undefined,
+  custName: string
+): boolean {
+  if (!custName || !custName.trim() || !a) return false;
+  const c = custName.toLowerCase().trim();
+  const ac = (a.customerName || "").toLowerCase().trim();
+  if (!ac) return false;
+
+  // 1. Exact match
+  if (ac === c) return true;
+
+  // 2. Substring match
+  if (ac.includes(c) || c.includes(ac)) return true;
+
+  // 3. Normalized alphanumeric comparison (ignoring punctuation & spaces)
+  const normC = c.replace(/[^a-z0-9]/g, "");
+  const normAc = ac.replace(/[^a-z0-9]/g, "");
+  if (normC && normAc) {
+    if (normC === normAc || normAc.includes(normC) || normC.includes(normAc)) {
+      return true;
+    }
+  }
+
+  // 4. Token matching on significant distinct words (ignoring generic terms)
+  const stopWords = new Set([
+    "hospital",
+    "clinic",
+    "center",
+    "centre",
+    "medical",
+    "dental",
+    "health",
+    "care",
+    "the",
+    "and",
+    "al",
+    "dr",
+    "qatar",
+    "doha",
+    "department",
+    "dept",
+    "specialized",
+    "complex",
+  ]);
+  const cTokens = c
+    .replace(/[^a-z0-9]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 2 && !stopWords.has(t));
+  const acTokens = ac
+    .replace(/[^a-z0-9]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 2 && !stopWords.has(t));
+
+  if (cTokens.length > 0 && acTokens.length > 0) {
+    const hasCommonToken = cTokens.some((tok) => acTokens.includes(tok));
+    if (hasCommonToken) return true;
+  }
+
+  return false;
 }

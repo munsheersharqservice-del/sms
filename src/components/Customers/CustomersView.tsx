@@ -24,6 +24,7 @@ import {
 import { Department, Customer, CustomerSector, isGovernmentCustomer, resolveCustomerSector } from '../../types';
 import { SheetsSyncModal } from '../GoogleSheets/SheetsSyncModal';
 import { AssetSoftwareSideDrawer } from '../Assets/AssetSoftwareSideDrawer';
+import { isAssetForCustomer } from '../../utils/attachmentHelper';
 
 export const CustomersView: React.FC = () => {
   const {
@@ -213,15 +214,17 @@ export const CustomersView: React.FC = () => {
   };
 
   const filteredCustomers = customers.filter((c) => {
+    const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.contactPerson && c.contactPerson.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (c.phone && c.phone.includes(searchQuery));
+      !q ||
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.location || '').toLowerCase().includes(q) ||
+      (c.contactPerson && c.contactPerson.toLowerCase().includes(q)) ||
+      (c.phone && c.phone.includes(q));
 
     const matchesDept = departmentFilter === 'ALL' || c.department === departmentFilter || c.department === 'Both';
     const matchesSector = sectorFilter === 'ALL' || (c.sector || 'Private') === sectorFilter;
-    return matchesSearch && matchesDept && matchesSector;
+    return Boolean(matchesSearch && matchesDept && matchesSector);
   });
 
   return (
@@ -427,9 +430,7 @@ export const CustomersView: React.FC = () => {
           </div>
         ) : (
           filteredCustomers.map((cust, idx) => {
-            const customerAssets = assets.filter(
-              (a) => a.customerName.toLowerCase() === cust.name.toLowerCase()
-            );
+            const customerAssets = assets.filter((a) => isAssetForCustomer(a, cust.name));
             const customerCases = cases.filter(
               (c) => c.customerName.toLowerCase() === cust.name.toLowerCase()
             );

@@ -21,7 +21,7 @@ import { generateWorkReportPdf } from '../../utils/pdfGenerator';
 import { DriveAttachmentUploader } from '../Common/DriveAttachmentUploader';
 import { CaseAttachmentList } from '../Common/CaseAttachmentList';
 import { SharqDigitalReportModal } from '../Common/SharqDigitalReportModal';
-import { buildCombinedDoneWorkAttachments } from '../../utils/attachmentHelper';
+import { buildCombinedDoneWorkAttachments, findMatchingCase } from '../../utils/attachmentHelper';
 
 export const DoneWorkView: React.FC = () => {
   const {
@@ -74,7 +74,50 @@ export const DoneWorkView: React.FC = () => {
       : doneWorkLogs.filter((dw) => dw.engineerName?.trim().toUpperCase() === adminEngineerFilter.toUpperCase())
     : assignedDoneWorkLogs;
 
-  const selectableCases = isAdmin ? cases : assignedCases;
+  const selectableCases = isAdmin
+    ? adminEngineerFilter === 'ALL'
+      ? cases
+      : cases.filter((c) => (c.assignedEngineerName || '').trim().toUpperCase() === adminEngineerFilter.toUpperCase())
+    : assignedCases;
+
+  // Track ticket numbers and case IDs already recorded in doneWorkLogs
+  const completedCaseIds = new Set(baseLogs.map((dw) => dw.caseId).filter(Boolean));
+  const completedTickets = new Set(
+    baseLogs.map((dw) => (dw.ticketNumber || dw.caseNumber || '').toString().trim().toUpperCase().replace(/^#/, '')).filter(Boolean)
+  );
+
+  // Active cases (New, Running, Pending, On Hold) not yet recorded into completed doneWorkLogs
+  const activeCaseLogs: DoneWorkLog[] = selectableCases
+    .filter((c) => {
+      const cTk = (c.ticketNumber || c.caseNumber || '').toString().trim().toUpperCase().replace(/^#/, '');
+      const isAlreadyCompleted = completedCaseIds.has(c.id) || (cTk && completedTickets.has(cTk));
+      return !isAlreadyCompleted;
+    })
+    .map((c) => ({
+      id: `case-open-${c.id}`,
+      caseId: c.id,
+      ticketNumber: c.ticketNumber,
+      caseNumber: c.caseNumber || c.ticketNumber,
+      customerName: c.customerName,
+      serialNumber: c.serialNumber || 'N/A',
+      model: c.model || 'Equipment',
+      department: c.department || 'Medical',
+      callType: c.callType || c.workClassification || 'Service',
+      workClassification: c.workClassification || c.callType || 'Service',
+      engineerName: c.assignedEngineerName || 'Unassigned',
+      dateCompleted: c.scheduledDate || c.createdAt?.split('T')[0] || '',
+      hoursSpent: 0,
+      workDoneSummary: c.remarks || c.issueDescription || 'Active Service Case (In Progress)',
+      partsReplaced: [],
+      attachments: c.attachments || [],
+      customerSignatoryName: c.customerSignatoryName || c.contactPersonName || '',
+      status: (c.status as any) || 'New',
+      serviceReportNumber: c.serviceReportNumber || '',
+      serviceReportDriveLink: c.serviceReportDriveLink,
+    }));
+
+  // Combined records: completed done work logs + open cases
+  const allRecords = [...baseLogs, ...activeCaseLogs];
 
   // Form State for Logging Work Done
   const [selectedCaseId, setSelectedCaseId] = useState(selectableCases[0]?.id || '');
@@ -156,7 +199,7 @@ export const DoneWorkView: React.FC = () => {
     setAttachments([]);
   };
 
-  const filteredLogs = baseLogs.filter((w) => {
+  const filteredLogs = allRecords.filter((w) => {
     const q = filterQuery.toLowerCase().trim();
     const matchesQuery =
       !q ||
@@ -191,7 +234,7 @@ export const DoneWorkView: React.FC = () => {
                 COMPLETED WORK LOGS & SERVICE REPORTS
               </h1>
               <span className="bg-[#4CAF50] text-white text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs shrink-0 whitespace-nowrap">
-                {baseLogs.length} Completed Logs
+                {allRecords.length} Work Records ({baseLogs.length} Done / Closed)
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -435,9 +478,7 @@ export const DoneWorkView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        const matchedCase = cases.find(
-                          (c) => c.id === log.caseId || c.ticketNumber === log.ticketNumber || c.caseNumber === log.caseNumber
-                        );
+                        const matchedCase = findMatchingCase(log, cases) || cases.find((c) => c.id === log.caseId);
                         setSelectedCaseForReport(matchedCase || null);
                         setIsDigitalReportModalOpen(true);
                       }}
@@ -484,17 +525,22 @@ export const DoneWorkView: React.FC = () => {
                   <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-medium">{log.workDoneSummary}</p>
                 </div>
 
-                {/* Attachments Gallery - Shows ALL attachments (both New Case & Close Case) without Drive folder link */}
+                {/* Attachments Gallery - Shows ALL attachments (both Open Case & Close Case) */}
                 {(() => {
-                  const matchedCase = cases.find(
-                    (c) =>
-                      (log.caseId && c.id === log.caseId) ||
-                      (log.ticketNumber && c.ticketNumber === log.ticketNumber) ||
-                      (log.caseNumber && c.ticketNumber === log.caseNumber)
-                  );
+                  const matchedCase = findMatchingCase(log, cases) || cases.find((c) => c.id === log.caseId);
                   const combinedAttachments = buildCombinedDoneWorkAttachments(log, matchedCase);
 
-                  if (combinedAttachments.length === 0) return null;
+                  if (combinedAttachments.length === 0) {
+                    return (
+                      <div className="bg-white/50 dark:bg-[#10192B]/50 px-3 py-2 rounded-xl border border-dashed border-slate-200 dark:border-[#1E293B] text-[11px] text-slate-400 dark:text-slate-500 flex items-center justify-between">
+                        <div className="flex items-center space-x-1.5">
+                          <Paperclip className="w-3.5 h-3.5 opacity-50" />
+                          <span>No attachments uploaded for this case yet.</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">Open Case & Close Case docs will display here</span>
+                      </div>
+                    );
+                  }
 
                   return (
                     <div className="bg-white/80 dark:bg-[#10192B]/80 p-2.5 rounded-xl border border-slate-200 dark:border-[#1E293B] shadow-2xs">

@@ -375,12 +375,6 @@ export const LoginPage: React.FC = () => {
                 QATAR
               </span>
             </div>
-            <p className={`text-xs sm:text-sm font-bold mt-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-              Biomedical & Dental Engineering Service Portal
-            </p>
-            <p className={`text-[11px] font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-              Equipment Registry, Work Logging & Asset Management
-            </p>
           </div>
         </div>
 
@@ -671,7 +665,7 @@ export const LoginPage: React.FC = () => {
                         required
                         value={loginIdentifier}
                         onChange={(e) => setLoginIdentifier(e.target.value)}
-                        placeholder="e.g. munsheer.sharqservice@gmail.com"
+                        placeholder=""
                         className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all focus:outline-hidden ${
                           isDarkMode
                             ? 'bg-slate-800/80 border border-slate-700 text-white placeholder:text-slate-500 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20'
@@ -693,7 +687,7 @@ export const LoginPage: React.FC = () => {
                         required
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder="Enter password"
+                        placeholder=""
                         className={`w-full pl-10 pr-10 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all focus:outline-hidden ${
                           isDarkMode
                             ? 'bg-slate-800/80 border border-slate-700 text-white placeholder:text-slate-500 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20'

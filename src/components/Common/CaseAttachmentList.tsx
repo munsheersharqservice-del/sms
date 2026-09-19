@@ -135,9 +135,9 @@ export const CaseAttachmentList: React.FC<CaseAttachmentListProps> = ({
           </div>
         </div>
 
-        {/* Stage Filter Chips (New Case vs Close Case) */}
-        {hasBothStages && (
-          <div className="flex items-center space-x-1.5 pt-0.5">
+        {/* Stage Filter Chips (Open Case vs Close Case) */}
+        {(newCaseCount > 0 || closeCaseCount > 0) && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
             <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mr-0.5">Filter:</span>
             <button
               type="button"
@@ -150,30 +150,34 @@ export const CaseAttachmentList: React.FC<CaseAttachmentListProps> = ({
             >
               All ({items.length})
             </button>
-            <button
-              type="button"
-              onClick={() => setStageFilter('New Case')}
-              className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold transition-colors cursor-pointer flex items-center space-x-1 ${
-                stageFilter === 'New Case'
-                  ? 'bg-sky-600 text-white shadow-2xs'
-                  : 'bg-sky-100 dark:bg-sky-950/70 text-sky-800 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-900'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
-              <span>New Case ({newCaseCount})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setStageFilter('Close Case')}
-              className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold transition-colors cursor-pointer flex items-center space-x-1 ${
-                stageFilter === 'Close Case'
-                  ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              <span>Close Case ({closeCaseCount})</span>
-            </button>
+            {newCaseCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setStageFilter('New Case')}
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold transition-colors cursor-pointer flex items-center space-x-1 ${
+                  stageFilter === 'New Case'
+                    ? 'bg-sky-600 text-white shadow-2xs'
+                    : 'bg-sky-100 dark:bg-sky-950/70 text-sky-800 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-900'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                <span>Open Case ({newCaseCount})</span>
+              </button>
+            )}
+            {closeCaseCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setStageFilter('Close Case')}
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold transition-colors cursor-pointer flex items-center space-x-1 ${
+                  stageFilter === 'Close Case'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>Close Case ({closeCaseCount})</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -318,13 +322,13 @@ export const CaseAttachmentList: React.FC<CaseAttachmentListProps> = ({
                     <div className="flex items-center space-x-1 min-w-0">
                       {item.stage && (
                         <span
-                          className={`text-[8px] font-black uppercase px-1 rounded shrink-0 ${
+                          className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded shrink-0 ${
                             item.stage === 'New Case'
-                              ? 'bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300'
-                            : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                              ? 'bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800'
+                              : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
                           }`}
                         >
-                          {item.stage === 'New Case' ? 'New' : 'Close'}
+                          {item.stage === 'New Case' ? 'Open Case' : 'Close Case'}
                         </span>
                       )}
                       <span
