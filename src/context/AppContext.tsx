@@ -21,6 +21,7 @@ import {
   ProjectStage,
   resolveCustomerSector,
   isGovernmentCustomer,
+  ScheduleItem,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -33,6 +34,7 @@ import {
   INITIAL_DONE_WORK,
   INITIAL_REQUESTS,
   INITIAL_PROJECTS,
+  INITIAL_SCHEDULES,
 } from '../data/mockData';
 import {
   fetchLiveDataFromGoogleSheets,
@@ -207,6 +209,13 @@ interface AppContextType {
   addProjectInstallationUpdate: (projectId: string, update: Omit<ProjectInstallationUpdate, 'id'>) => void;
   addProjectDocumentSubmission: (projectId: string, doc: Omit<ProjectDocumentSubmission, 'id'>) => void;
   addProjectPendingRemark: (projectId: string, remark: Omit<ProjectPendingRemark, 'id'>) => void;
+
+  // Schedules, Appointments & Calendar
+  schedules: ScheduleItem[];
+  assignedSchedules: ScheduleItem[];
+  addSchedule: (item: Omit<ScheduleItem, 'id' | 'createdAt' | 'updatedAt'>) => ScheduleItem;
+  updateSchedule: (id: string, updates: Partial<ScheduleItem>) => void;
+  deleteSchedule: (id: string) => void;
 
   // Google Sheets integration status & Active Sheet Control
   currentSpreadsheetId: string;
@@ -871,6 +880,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 10. Projects (Single Source of Truth: Live Database / Excel)
   const [projects, setProjects] = useState<ServiceProject[]>([]);
 
+  // 11. Engineer Schedules, Appointments & Calendar
+  const [schedules, setSchedules] = useState<ScheduleItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('sharq_v3_engineer_schedules');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return INITIAL_SCHEDULES;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sharq_v3_engineer_schedules', JSON.stringify(schedules || []));
+    } catch {}
+  }, [schedules]);
+
 
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [sheetsSyncStatus, setSheetsSyncStatus] = useState<string | null>(null);
@@ -996,6 +1025,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, [requests, currentUser, isAdmin]);
 
+  const assignedSchedules = useMemo(() => {
+    if (!currentUser) return [];
+    if (isAdmin) return schedules;
+    const currentName = currentUser.name?.trim().toUpperCase();
+    const currentId = currentUser.id?.trim().toLowerCase();
+    return schedules.filter((s) => {
+      const engName = (s.engineerName || '').trim().toUpperCase();
+      const engId = (s.engineerId || '').trim().toLowerCase();
+      return engName === currentName || engId === currentId;
+    });
+  }, [schedules, currentUser, isAdmin]);
+
   const clearAllData = async () => {
     localStorage.removeItem('sharq_v3_assets');
     localStorage.removeItem('sharq_v3_cases');
@@ -1004,6 +1045,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('sharq_v3_projects');
     localStorage.removeItem('sharq_v3_software_licenses');
     localStorage.removeItem('sharq_v3_spare_parts');
+    localStorage.removeItem('sharq_v3_engineer_schedules');
     localStorage.setItem('sharq_real_mode_v5', 'true');
     setAssets([]);
     setCases([]);
@@ -1012,6 +1054,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProjects([]);
     setSoftwareLicenses([]);
     setSpareParts([]);
+    setSchedules(INITIAL_SCHEDULES);
     setSheetsSyncStatus('All data cleared. System is in Real Mode (Clean State).');
     setTimeout(() => setSheetsSyncStatus(null), 4000);
   };
@@ -2282,6 +2325,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  // Schedule & Appointment actions
+  const addSchedule = (
+    itemData: Omit<ScheduleItem, 'id' | 'createdAt' | 'updatedAt'>
+  ): ScheduleItem => {
+    const now = new Date().toISOString();
+    const newId = `sch-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newSchedule: ScheduleItem = {
+      ...itemData,
+      id: newId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setSchedules((prev) => [newSchedule, ...prev]);
+    return newSchedule;
+  };
+
+  const updateSchedule = (id: string, updates: Partial<ScheduleItem>) => {
+    const now = new Date().toISOString();
+    setSchedules((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updates, updatedAt: now } : item))
+    );
+  };
+
+  const deleteSchedule = (id: string) => {
+    setSchedules((prev) => prev.filter((item) => item.id !== id));
+  };
+
   // Refresh all data directly from live Google Sheet tabs with smart non-destructive merging
   const refreshFromGoogleSheets = async (notify: boolean = true, targetSpreadsheetId?: string) => {
     setIsSyncingSheets(true);
@@ -2978,6 +3048,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addProjectInstallationUpdate,
         addProjectDocumentSubmission,
         addProjectPendingRemark,
+        schedules,
+        assignedSchedules,
+        addSchedule,
+        updateSchedule,
+        deleteSchedule,
         currentSpreadsheetId,
         currentSpreadsheetUrl,
         setCustomSpreadsheetId,

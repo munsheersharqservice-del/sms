@@ -50,6 +50,7 @@ import {
 import { CaseAttachmentList } from '../Common/CaseAttachmentList';
 import { SharqDigitalReportModal } from '../Common/SharqDigitalReportModal';
 import { extractGoogleDriveFileId } from '../../utils/attachmentHelper';
+import { ScheduleCalendarView } from './ScheduleCalendarView';
 
 export const MyDeskView: React.FC = () => {
   const displayCleanText = (val: any, fallback: string = ''): string => {
@@ -76,7 +77,14 @@ export const MyDeskView: React.FC = () => {
     isGoogleConnected,
     googleUser,
     connectGoogle,
+    schedules,
+    assignedSchedules,
   } = useApp();
+
+  // Desk Mode Option: Active Calls vs Schedule Calendar
+  const [deskOption, setDeskOption] = useState<'calls' | 'calendar'>('calls');
+  const [scheduleTicketPrefill, setScheduleTicketPrefill] = useState<string | undefined>(undefined);
+  const [scheduleCustomerPrefill, setScheduleCustomerPrefill] = useState<string | undefined>(undefined);
 
   const [isDigitalReportModalOpen, setIsDigitalReportModalOpen] = useState(false);
   const [digitalReportCase, setDigitalReportCase] = useState<ServiceCase | null>(null);
@@ -586,9 +594,41 @@ export const MyDeskView: React.FC = () => {
           </div>
         </div>
 
-        {/* Action button to create call - Admin only */}
-        {isAdmin && (
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* Desk View Switcher: Assigned Calls vs Schedule Calendar */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="flex items-center bg-slate-800/90 rounded-xl p-1 border border-slate-700">
+            <button
+              type="button"
+              onClick={() => {
+                setDeskOption('calls');
+                setScheduleTicketPrefill(undefined);
+                setScheduleCustomerPrefill(undefined);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                deskOption === 'calls'
+                  ? 'bg-teal-500 text-slate-950 shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+            >
+              <Laptop2 className="w-3.5 h-3.5" />
+              <span>Assigned Calls ({baseCases.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeskOption('calendar')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                deskOption === 'calendar'
+                  ? 'bg-teal-500 text-slate-950 shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Schedule Calendar ({isAdmin ? schedules.length : assignedSchedules.length})</span>
+            </button>
+          </div>
+
+          {/* Action button to create call - Admin only */}
+          {isAdmin && deskOption === 'calls' && (
             <button
               type="button"
               onClick={() => setActiveTab('new_case')}
@@ -597,12 +637,19 @@ export const MyDeskView: React.FC = () => {
               <Plus className="w-4 h-4" />
               <span>+ NEW SERVICE CALL</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* COMPACT FILTER & STATUS BAR */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 sm:p-3.5 shadow-2xs space-y-2.5 transition-colors">
+      {deskOption === 'calendar' ? (
+        <ScheduleCalendarView
+          prefilledTicket={scheduleTicketPrefill}
+          prefilledCustomer={scheduleCustomerPrefill}
+        />
+      ) : (
+        <>
+          {/* COMPACT FILTER & STATUS BAR */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 sm:p-3.5 shadow-2xs space-y-2.5 transition-colors">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           {isAdmin ? (
             <div className="flex items-center space-x-2">
@@ -935,6 +982,21 @@ export const MyDeskView: React.FC = () => {
                       <span>⚡ CLOSE CASE</span>
                     </button>
 
+                    {/* SCHEDULE APPOINTMENT / WORK VISIT */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduleTicketPrefill(sc.ticketNumber);
+                        setScheduleCustomerPrefill(sc.customerName);
+                        setDeskOption('calendar');
+                      }}
+                      className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center space-x-1 transition-all cursor-pointer shadow-2xs"
+                      title="Schedule an appointment or work visit on calendar for this case"
+                    >
+                      <Calendar className="w-3 h-3" />
+                      <span>Schedule Visit</span>
+                    </button>
+
                     <span className="text-[10px] font-bold text-slate-400 uppercase mx-1">
                       Status:
                     </span>
@@ -1035,6 +1097,8 @@ export const MyDeskView: React.FC = () => {
           })
         )}
       </div>
+      </>
+      )}
 
       {/* COMPREHENSIVE CASE EXECUTION & SERVICE REPORT MODAL */}
       {selectedCaseForAction && (

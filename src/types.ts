@@ -387,3 +387,27 @@ export interface RequestItem {
   closingAttachmentUrl?: string;
 }
 
+export type ScheduleType = 'Appointment' | 'Work Schedule' | 'Note';
+export type ScheduleStatus = 'Scheduled' | 'In Progress' | 'Completed' | 'Postponed' | 'Cancelled';
+export type SchedulePriority = 'Low' | 'Normal' | 'High' | 'Urgent';
+
+export interface ScheduleItem {
+  id: string;
+  engineerId: string;
+  engineerName: string;
+  type: ScheduleType;
+  title: string;
+  date: string; // YYYY-MM-DD
+  startTime?: string; // e.g. "09:00"
+  endTime?: string; // e.g. "11:30"
+  isAllDay?: boolean;
+  customerName?: string;
+  location?: string;
+  relatedTicketNumber?: string;
+  status: ScheduleStatus;
+  priority?: SchedulePriority;
+  remark: string; // Remarks, notes, scope of work, findings
+  createdAt: string;
+  updatedAt: string;
+}
+
