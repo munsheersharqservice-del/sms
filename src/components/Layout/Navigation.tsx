@@ -14,8 +14,9 @@ import {
   ChevronDown,
   MoreHorizontal,
   LucideIcon,
+  ShieldAlert,
 } from 'lucide-react';
-import { analyzePpmStatus } from '../../utils/ppmUtils';
+import { analyzePpmStatus, analyzeWarrantyStatus } from '../../utils/ppmUtils';
 
 interface NavItem {
   id:
@@ -29,6 +30,7 @@ interface NavItem {
     | 'requests'
     | 'projects'
     | 'engineer_profiles';
+  viewMode?: 'PPM_SCHEDULE' | 'WARRANTY_EXPIRING';
   label: string;
   icon: LucideIcon;
   badge?: number | null;
@@ -37,7 +39,19 @@ interface NavItem {
 }
 
 export const Navigation: React.FC = () => {
-  const { activeTab, setActiveTab, cases, requests, customers, assets, isDarkMode, isAdmin, users } = useApp();
+  const {
+    activeTab,
+    setActiveTab,
+    ppmViewMode,
+    setPpmViewMode,
+    cases,
+    requests,
+    customers,
+    assets,
+    isDarkMode,
+    isAdmin,
+    users,
+  } = useApp();
 
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -48,6 +62,10 @@ export const Navigation: React.FC = () => {
   const ppmDueCount = assets.filter((a) => {
     const status = analyzePpmStatus(a.nextPpmDate);
     return status.isDueThisMonth || status.isOverdue;
+  }).length;
+  const expiringWarrantyCount = assets.filter((a) => {
+    const status = analyzeWarrantyStatus(a);
+    return status.isExpiringThisMonth || (status.daysRemaining >= 0 && status.daysRemaining <= 90);
   }).length;
 
   // Primary task bar tabs requested by user to fit on screen:
@@ -89,11 +107,21 @@ export const Navigation: React.FC = () => {
   const moreNavItems: NavItem[] = [
     {
       id: 'ppm',
-      label: 'PPM DUE',
+      viewMode: 'PPM_SCHEDULE',
+      label: 'PPM DUE SCHEDULE',
       icon: CalendarCheck,
       badge: ppmDueCount > 0 ? ppmDueCount : null,
       activeColor: 'bg-amber-600 text-white shadow-xs',
       iconColor: 'text-amber-600',
+    },
+    {
+      id: 'ppm',
+      viewMode: 'WARRANTY_EXPIRING',
+      label: 'WARRENTY ENDING DEVICE BY MONTH',
+      icon: ShieldAlert,
+      badge: expiringWarrantyCount > 0 ? expiringWarrantyCount : null,
+      activeColor: 'bg-indigo-600 text-white shadow-xs',
+      iconColor: 'text-indigo-500',
     },
     {
       id: 'customers',
@@ -139,9 +167,20 @@ export const Navigation: React.FC = () => {
       : []),
   ];
 
-  const isMoreActive = moreNavItems.some((item) => item.id === activeTab);
-  const activeMoreItem = moreNavItems.find((item) => item.id === activeTab);
-  const moreAlertCount = (pendingRequestsCount > 0 ? pendingRequestsCount : 0) + (ppmDueCount > 0 ? ppmDueCount : 0);
+  const isItemActive = (item: NavItem) => {
+    if (item.id !== activeTab) return false;
+    if (item.id === 'ppm' && item.viewMode) {
+      return ppmViewMode === item.viewMode;
+    }
+    return true;
+  };
+
+  const isMoreActive = moreNavItems.some(isItemActive);
+  const activeMoreItem = moreNavItems.find(isItemActive);
+  const moreAlertCount =
+    (pendingRequestsCount > 0 ? pendingRequestsCount : 0) +
+    (ppmDueCount > 0 ? ppmDueCount : 0) +
+    (expiringWarrantyCount > 0 ? expiringWarrantyCount : 0);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -252,15 +291,18 @@ export const Navigation: React.FC = () => {
                   <span className="text-[9px] font-normal lowercase opacity-75">Click to view</span>
                 </div>
                 <div className="space-y-1">
-                  {moreNavItems.map((item) => {
+                  {moreNavItems.map((item, idx) => {
                     const Icon = item.icon;
-                    const isActive = activeTab === item.id;
+                    const isActive = isItemActive(item);
                     return (
                       <button
-                        key={item.id}
+                        key={`${item.id}-${item.viewMode || idx}`}
                         type="button"
                         onClick={() => {
                           setActiveTab(item.id);
+                          if (item.viewMode) {
+                            setPpmViewMode(item.viewMode);
+                          }
                           setIsMoreOpen(false);
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${

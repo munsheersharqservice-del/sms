@@ -24,6 +24,8 @@ import {
   Phone,
   User as UserIcon,
   ShieldCheck,
+  Eye,
+  HardDrive,
 } from 'lucide-react';
 import { Department, WorkClassification, WarrantyStatus, Asset, Customer, AttachmentItem, resolveCustomerSector, isGovernmentCustomer } from '../../types';
 import { DriveAttachmentUploader } from '../Common/DriveAttachmentUploader';
@@ -61,6 +63,10 @@ export const NewCaseView: React.FC = () => {
   // Case Number Mode: Auto vs Manual
   const [caseNumberMode, setCaseNumberMode] = useState<'AUTO' | 'MANUAL'>('AUTO');
   const [manualCaseNumber, setManualCaseNumber] = useState('');
+
+  // Call / Registration Date (User requirement: Choose date in new case creating)
+  const [callDate, setCallDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [showCustomerAssetsModal, setShowCustomerAssetsModal] = useState<boolean>(false);
 
   // Active Ticket Number string
   const activeTicketNumber =
@@ -319,6 +325,10 @@ export const NewCaseView: React.FC = () => {
     );
     const assignedEngineerId = assignedUser ? assignedUser.id : `eng-${engineerName.toLowerCase()}`;
 
+    const finalCreatedAt = callDate
+      ? new Date(`${callDate}T${new Date().toTimeString().split(' ')[0]}`).toISOString()
+      : new Date().toISOString();
+
     const created = addCase({
       ticketNumber: finalTicketNumber,
       caseNumber: caseReference.trim() || finalTicketNumber,
@@ -335,6 +345,8 @@ export const NewCaseView: React.FC = () => {
       issueDescription: issueReported.trim(),
       contactPersonName: contactPerson.trim() || undefined,
       contactPersonPhone: contactPhone.trim() || undefined,
+      scheduledDate: callDate,
+      createdAt: finalCreatedAt,
       attachments,
       serviceReportDriveLink: attachments.length > 0 && attachments[0].driveLink ? attachments[0].driveLink : '',
       status: 'New',
@@ -414,47 +426,74 @@ export const NewCaseView: React.FC = () => {
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden transition-colors">
         {/* FORM */}
         <form id="form-create-call" onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
-          {/* TICKET NUMBERING MODE (AUTO VS MANUAL) */}
-          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center space-x-2">
-              <Hash className="w-4 h-4 text-emerald-600" />
-              <span className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                Ticket Numbering:
-              </span>
+          {/* TICKET NUMBERING MODE & CALL REGISTRATION DATE */}
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Left: Ticket Numbering */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center space-x-1.5">
+                <Hash className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Ticket #:
+                </span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCaseNumberMode('AUTO')}
+                  className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                    caseNumberMode === 'AUTO'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  Auto (#{nextAutoTicketNumber})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCaseNumberMode('MANUAL')}
+                  className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                    caseNumberMode === 'MANUAL'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  Custom #
+                </button>
+                {caseNumberMode === 'MANUAL' && (
+                  <input
+                    type="text"
+                    value={manualCaseNumber}
+                    onChange={(e) => setManualCaseNumber(e.target.value.toUpperCase())}
+                    placeholder="e.g. 202610"
+                    className="w-28 px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg font-mono font-bold uppercase bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-1 focus:ring-emerald-500 outline-none"
+                    required
+                  />
+                )}
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
+
+            {/* Right: Call / Registration Date (User Requirement #2) */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-slate-200 dark:border-slate-700">
+              <div className="flex items-center space-x-1.5">
+                <Calendar className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                <span className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Call Date:
+                </span>
+              </div>
+              <input
+                type="date"
+                value={callDate}
+                onChange={(e) => setCallDate(e.target.value)}
+                className="px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg font-mono font-bold bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-1 focus:ring-teal-500 outline-none cursor-pointer"
+                required
+              />
               <button
                 type="button"
-                onClick={() => setCaseNumberMode('AUTO')}
-                className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                  caseNumberMode === 'AUTO'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
+                onClick={() => setCallDate(new Date().toISOString().split('T')[0])}
+                className="px-2 py-1 text-[11px] font-bold bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900 text-teal-800 dark:text-teal-200 border border-teal-200 dark:border-teal-800 rounded-md transition-colors cursor-pointer"
               >
-                Auto (#{nextAutoTicketNumber})
+                Today
               </button>
-              <button
-                type="button"
-                onClick={() => setCaseNumberMode('MANUAL')}
-                className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                  caseNumberMode === 'MANUAL'
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                Custom #
-              </button>
-              {caseNumberMode === 'MANUAL' && (
-                <input
-                  type="text"
-                  value={manualCaseNumber}
-                  onChange={(e) => setManualCaseNumber(e.target.value.toUpperCase())}
-                  placeholder="e.g. 202610 or SR-991"
-                  className="w-32 px-2.5 py-1 text-xs border border-slate-300 rounded-lg font-mono font-bold uppercase bg-white focus:ring-2 focus:ring-emerald-200 outline-none"
-                  required
-                />
-              )}
             </div>
           </div>
 
@@ -513,47 +552,73 @@ export const NewCaseView: React.FC = () => {
                     id="call-customer-results"
                     className="search-results-box absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto left-0 divide-y divide-slate-100"
                   >
-                    {filteredCustomers.map((cust) => (
-                      <button
-                        key={cust.id}
-                        type="button"
-                        onClick={() => handleSelectCustomer(cust.name)}
-                        className="w-full text-left p-3 hover:bg-blue-50 transition-colors flex items-center justify-between cursor-pointer"
-                      >
-                        <div>
-                          <div className="font-bold text-xs text-slate-900 uppercase">
-                            {cust.name}
+                    {filteredCustomers.map((cust) => {
+                      const custAssets = assets.filter((a) => isAssetForCustomer(a, cust.name));
+                      return (
+                        <button
+                          key={cust.id}
+                          type="button"
+                          onClick={() => handleSelectCustomer(cust.name)}
+                          className="w-full text-left p-3 hover:bg-blue-50 transition-colors flex items-center justify-between cursor-pointer"
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-slate-900 uppercase">
+                                {cust.name}
+                              </span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.2 rounded border ${
+                                custAssets.length > 0
+                                  ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                  : 'bg-slate-100 text-slate-500 border-slate-200'
+                              }`}>
+                                {custAssets.length} {custAssets.length === 1 ? 'Asset' : 'Assets'}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {cust.location || 'Doha, Qatar'} • {cust.contactPerson || 'Biomedical Dept'}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-slate-500">
-                            {cust.location || 'Doha, Qatar'} • {cust.contactPerson || 'Biomedical Dept'}
-                          </div>
-                        </div>
-                        {selectedCustomer === cust.name && (
-                          <Check className="w-4 h-4 text-emerald-600" />
-                        )}
-                      </button>
-                    ))}
+                          {selectedCustomer === cust.name && (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
                 {/* Customer Contact Sub-info */}
                 {selectedCustomer && (
-                  <div className="mt-2.5 p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg text-[11px] text-blue-950 flex flex-wrap gap-x-4 gap-y-1">
-                    {contactPerson && (
-                      <span className="flex items-center space-x-1">
-                        <UserIcon className="w-3 h-3 text-blue-600" />
-                        <span>{contactPerson}</span>
+                  <div className="mt-2.5 p-2.5 bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg text-[11px] text-blue-950 dark:text-blue-200 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                      {contactPerson && (
+                        <span className="flex items-center space-x-1">
+                          <UserIcon className="w-3 h-3 text-blue-600" />
+                          <span>{contactPerson}</span>
+                        </span>
+                      )}
+                      {contactPhone && (
+                        <span className="flex items-center space-x-1">
+                          <Phone className="w-3 h-3 text-blue-600" />
+                          <span className="font-mono">{contactPhone}</span>
+                        </span>
+                      )}
+                      <span className="text-blue-700 dark:text-blue-300 font-bold">
+                        {customerMatchedAssets.length} Assets Registered
                       </span>
+                    </div>
+
+                    {customerMatchedAssets.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomerAssetsModal(true)}
+                        className="px-2.5 py-1 text-[11px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-2xs transition-colors flex items-center space-x-1 cursor-pointer"
+                        title={`View detailed specifications of all ${customerMatchedAssets.length} assets registered for ${selectedCustomer}`}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View Asset Details ({customerMatchedAssets.length})</span>
+                      </button>
                     )}
-                    {contactPhone && (
-                      <span className="flex items-center space-x-1">
-                        <Phone className="w-3 h-3 text-blue-600" />
-                        <span className="font-mono">{contactPhone}</span>
-                      </span>
-                    )}
-                    <span className="text-blue-700 font-semibold">
-                      {customerMatchedAssets.length} Assets Registered
-                    </span>
                   </div>
                 )}
               </div>
@@ -877,19 +942,75 @@ export const NewCaseView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Case Reference / Clinic Number */}
-              <div>
-                <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2">
-                  Case Reference / Clinic Number
-                </label>
-                <input
-                  type="text"
-                  id="call-case"
-                  value={caseReference}
-                  onChange={(e) => setCaseReference(e.target.value)}
-                  className="w-full bg-white text-black border border-slate-300 p-3 rounded-lg text-sm font-bold focus:border-emerald-500 outline-none placeholder-slate-400"
-                  placeholder="Optional internal reference..."
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Choose Service / Dispatch Date */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Choose Date</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-mono font-bold">
+                      {callDate}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <input
+                      type="date"
+                      value={callDate}
+                      onChange={(e) => setCallDate(e.target.value)}
+                      className="w-full bg-white text-black border border-slate-300 p-2.5 rounded-lg text-sm font-bold font-mono focus:border-emerald-500 outline-none cursor-pointer"
+                      required
+                    />
+                    <div className="flex items-center gap-1 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setCallDate(new Date().toISOString().split('T')[0])}
+                        className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold cursor-pointer"
+                      >
+                        Today
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setDate(d.getDate() + 1);
+                          setCallDate(d.toISOString().split('T')[0]);
+                        }}
+                        className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold cursor-pointer"
+                      >
+                        Tomorrow
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setDate(d.getDate() + 7);
+                          setCallDate(d.toISOString().split('T')[0]);
+                        }}
+                        className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold cursor-pointer"
+                      >
+                        +7 Days
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Case Reference / Clinic Number */}
+                <div>
+                  <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2">
+                    Case Reference / Clinic Number
+                  </label>
+                  <input
+                    type="text"
+                    id="call-case"
+                    value={caseReference}
+                    onChange={(e) => setCaseReference(e.target.value)}
+                    className="w-full bg-white text-black border border-slate-300 p-3 rounded-lg text-sm font-bold focus:border-emerald-500 outline-none placeholder-slate-400"
+                    placeholder="Optional internal reference..."
+                  />
+                </div>
               </div>
             </div>
 
@@ -974,6 +1095,116 @@ export const NewCaseView: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* CUSTOMER ASSETS DETAILS MODAL (User Requirement #3) */}
+      {showCustomerAssetsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-4xl w-full p-5 sm:p-6 space-y-4 my-8 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 shrink-0">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl">
+                  <HardDrive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white uppercase">
+                    Assets Registered Under {selectedCustomer}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Total {customerMatchedAssets.length} active equipment records found in master registry
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCustomerAssetsModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* List of Assets */}
+            <div className="overflow-y-auto space-y-2.5 flex-1 pr-1">
+              {customerMatchedAssets.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-xs">
+                  No assets currently registered under this customer.
+                </div>
+              ) : (
+                customerMatchedAssets.map((ast) => {
+                  const isSelected = selectedAsset?.id === ast.id;
+                  return (
+                    <div
+                      key={ast.id}
+                      className={`p-3.5 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/40 ring-2 ring-blue-500/20'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-blue-300'
+                      }`}
+                    >
+                      <div className="space-y-1 text-xs">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono font-black text-blue-700 dark:text-blue-400 text-xs bg-blue-100 dark:bg-blue-950/80 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                            S/N: {ast.serialNumber}
+                          </span>
+                          <span className="font-extrabold text-slate-900 dark:text-white text-xs">
+                            {ast.manufacturer} — {ast.model}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                            {ast.department}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-400">
+                          {ast.customerLocation && (
+                            <span>Location: <strong>{ast.customerLocation}</strong></span>
+                          )}
+                          {ast.roomNumber && (
+                            <span>Room: <strong>{ast.roomNumber}</strong></span>
+                          )}
+                          {ast.warrantyExpiry && (
+                            <span>Warranty Expiry: <strong className="font-mono text-emerald-600">{ast.warrantyExpiry}</strong></span>
+                          )}
+                          {ast.nextPpmDate && (
+                            <span>Next PPM: <strong className="font-mono text-orange-600">{ast.nextPpmDate}</strong> ({ast.ppmFrequency || 'N/A'})</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 flex items-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectAsset(ast);
+                            setShowCustomerAssetsModal(false);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                            isSelected
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950'
+                          }`}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>{isSelected ? 'Selected' : 'Select for Call'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowCustomerAssetsModal(false)}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -17,8 +17,9 @@ import {
   Cloud,
   Download,
   ExternalLink,
+  ShieldAlert,
 } from 'lucide-react';
-import { analyzePpmStatus } from '../../utils/ppmUtils';
+import { analyzePpmStatus, analyzeWarrantyStatus } from '../../utils/ppmUtils';
 import { SHARQ_GOOGLE_DRIVE_FOLDER_URL } from '../../utils/googleDrive';
 import { DEFAULT_SPREADSHEET_URL } from '../../utils/googleSheets';
 
@@ -26,6 +27,8 @@ export const MobileNavBar: React.FC = () => {
   const {
     activeTab,
     setActiveTab,
+    ppmViewMode,
+    setPpmViewMode,
     cases,
     requests,
     assets,
@@ -47,6 +50,10 @@ export const MobileNavBar: React.FC = () => {
   const ppmDueCount = assets.filter((a) => {
     const status = analyzePpmStatus(a.nextPpmDate);
     return status.isDueThisMonth || status.isOverdue;
+  }).length;
+  const expiringWarrantyCount = assets.filter((a) => {
+    const status = analyzeWarrantyStatus(a);
+    return status.isExpiringThisMonth || (status.daysRemaining >= 0 && status.daysRemaining <= 90);
   }).length;
 
   useEffect(() => {
@@ -112,17 +119,18 @@ export const MobileNavBar: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setActiveTab('ppm');
+                    setPpmViewMode('PPM_SCHEDULE');
                     setIsMoreOpen(false);
                   }}
                   className={`flex items-center space-x-3 p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[50px] ${
-                    activeTab === 'ppm'
+                    activeTab === 'ppm' && ppmViewMode === 'PPM_SCHEDULE'
                       ? 'bg-amber-600 border-amber-500 text-white font-bold shadow-sm'
                       : isDarkMode
                       ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-750'
                       : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  <div className={`p-2 rounded-lg ${activeTab === 'ppm' ? 'bg-white/20' : 'bg-amber-500/15 text-amber-500'}`}>
+                  <div className={`p-2 rounded-lg ${activeTab === 'ppm' && ppmViewMode === 'PPM_SCHEDULE' ? 'bg-white/20' : 'bg-amber-500/15 text-amber-500'}`}>
                     <CalendarCheck className="w-5 h-5" />
                   </div>
                   <div>
@@ -135,6 +143,38 @@ export const MobileNavBar: React.FC = () => {
                       )}
                     </div>
                     <div className="text-[10px] opacity-75">Maintenance schedule</div>
+                  </div>
+                </button>
+
+                {/* Warranty Ending Device by Month */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('ppm');
+                    setPpmViewMode('WARRANTY_EXPIRING');
+                    setIsMoreOpen(false);
+                  }}
+                  className={`flex items-center space-x-3 p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[50px] ${
+                    activeTab === 'ppm' && ppmViewMode === 'WARRANTY_EXPIRING'
+                      ? 'bg-indigo-600 border-indigo-500 text-white font-bold shadow-sm'
+                      : isDarkMode
+                      ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-750'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg ${activeTab === 'ppm' && ppmViewMode === 'WARRANTY_EXPIRING' ? 'bg-white/20' : 'bg-indigo-500/15 text-indigo-400'}`}>
+                    <ShieldAlert className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight flex items-center gap-1.5">
+                      Warranty Ending
+                      {expiringWarrantyCount > 0 && (
+                        <span className="bg-indigo-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                          {expiringWarrantyCount}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] opacity-75">Devices by month</div>
                   </div>
                 </button>
 

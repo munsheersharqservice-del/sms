@@ -20,6 +20,12 @@ import {
   Settings,
   AlertTriangle,
   RefreshCw,
+  Eye,
+  ChevronDown,
+  ChevronUp,
+  Calendar,
+  Check,
+  X,
 } from 'lucide-react';
 import { Department, Customer, CustomerSector, isGovernmentCustomer, resolveCustomerSector } from '../../types';
 import { SheetsSyncModal } from '../GoogleSheets/SheetsSyncModal';
@@ -52,6 +58,11 @@ export const CustomersView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+
+  // Customer Assets Details Inspection Modal & In-Card Expand (User Requirement #3)
+  const [selectedCustomerForAssetsModal, setSelectedCustomerForAssetsModal] = useState<Customer | null>(null);
+  const [expandedCardCustId, setExpandedCardCustId] = useState<string | null>(null);
+  const [assetSearchInModal, setAssetSearchInModal] = useState<string>('');
 
   // Asset Creation Side Drawer State for Customer View
   const [isAddAssetDrawerOpen, setIsAddAssetDrawerOpen] = useState(false);
@@ -523,20 +534,34 @@ export const CustomersView: React.FC = () => {
 
                 {/* Linked Assets & Service Calls Badges + Quick Add Asset */}
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs flex-wrap gap-2">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1.5 flex-wrap">
                     <button
                       type="button"
-                      onClick={() => {
-                        setAssetSearchQuery(cust.name);
-                        setAssetSubTab('search');
-                        setActiveTab('assets');
-                      }}
-                      className="px-2 py-1 bg-slate-100 hover:bg-teal-50 hover:text-teal-800 text-slate-700 rounded-md font-semibold text-[11px] flex items-center space-x-1"
-                      title={`View all ${customerAssets.length} registered assets for ${cust.name}`}
+                      onClick={() => setSelectedCustomerForAssetsModal(cust)}
+                      className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-md font-bold text-[11px] flex items-center space-x-1 cursor-pointer transition-colors shadow-2xs"
+                      title={`Click to view detailed specifications of all ${customerAssets.length} registered assets for ${cust.name}`}
                     >
-                      <HardDrive className="w-3 h-3 text-teal-600" />
+                      <HardDrive className="w-3.5 h-3.5 text-teal-600" />
                       <span>{customerAssets.length} Assets</span>
+                      <Eye className="w-3 h-3 text-teal-700 ml-0.5" />
                     </button>
+
+                    {customerAssets.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedCardCustId((prev) => (prev === cust.id ? null : cust.id))
+                        }
+                        className="p-1 hover:bg-slate-100 text-slate-500 rounded-md transition-colors cursor-pointer"
+                        title={expandedCardCustId === cust.id ? 'Hide asset preview' : 'Quick preview assets inline'}
+                      >
+                        {expandedCardCustId === cust.id ? (
+                          <ChevronUp className="w-3.5 h-3.5 text-teal-600" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -554,11 +579,11 @@ export const CustomersView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleOpenAddAsset(cust.name)}
-                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold text-[11px] flex items-center space-x-1 shadow-2xs cursor-pointer transition-colors"
+                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold text-[11px] flex items-center space-x-1 shadow-2xs cursor-pointer transition-colors"
                       title={`Add new asset/equipment for ${cust.name}`}
                     >
                       <Plus className="w-3 h-3" />
-                      <span>Add Asset</span>
+                      <span>Asset</span>
                     </button>
 
                     <button
@@ -573,6 +598,48 @@ export const CustomersView: React.FC = () => {
                     </button>
                   </div>
                 </div>
+
+                {/* Inline Quick Asset Preview when expanded */}
+                {expandedCardCustId === cust.id && customerAssets.length > 0 && (
+                  <div className="pt-2.5 border-t border-slate-100 space-y-2 text-xs animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase">
+                      <span>Registered Assets ({customerAssets.length}):</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCustomerForAssetsModal(cust)}
+                        className="text-teal-600 hover:underline flex items-center space-x-0.5 font-bold"
+                      >
+                        <span>full details →</span>
+                      </button>
+                    </div>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                      {customerAssets.map((ast) => (
+                        <div
+                          key={ast.id}
+                          onClick={() => setSelectedCustomerForAssetsModal(cust)}
+                          className="p-2 rounded-lg bg-slate-50 hover:bg-teal-50/50 border border-slate-200 transition-colors cursor-pointer text-xs space-y-0.5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-slate-900 text-xs">
+                              {ast.manufacturer} - {ast.model}
+                            </span>
+                            <span className="text-[10px] font-mono font-bold bg-slate-200 text-slate-800 px-1.5 py-0.2 rounded">
+                              {ast.serialNumber}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-500">
+                            <span>Dept: {ast.department} {ast.roomNumber ? `• Room ${ast.roomNumber}` : ''}</span>
+                            {ast.warrantyExpiry && (
+                              <span className="text-emerald-700 font-semibold font-mono">
+                                Exp: {ast.warrantyExpiry}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })
@@ -787,6 +854,178 @@ export const CustomersView: React.FC = () => {
         initialMode="asset"
         prefilledCustomerName={targetCustomerForAsset}
       />
+
+      {/* CUSTOMER ASSETS DETAILS MODAL (User Requirement #3) */}
+      {selectedCustomerForAssetsModal && (() => {
+        const cust = selectedCustomerForAssetsModal;
+        const custAssets = assets.filter((a) => isAssetForCustomer(a, cust.name));
+        const q = assetSearchInModal.toLowerCase().trim();
+        const displayAssets = q
+          ? custAssets.filter((a) =>
+              (a.serialNumber || '').toLowerCase().includes(q) ||
+              (a.model || '').toLowerCase().includes(q) ||
+              (a.manufacturer || '').toLowerCase().includes(q) ||
+              (a.roomNumber || '').toLowerCase().includes(q)
+            )
+          : custAssets;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs overflow-y-auto">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-4xl w-full p-5 sm:p-6 space-y-4 my-8 max-h-[92vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 shrink-0">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2.5 bg-teal-500/20 text-teal-600 dark:text-teal-400 rounded-xl">
+                    <HardDrive className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-extrabold text-slate-900 dark:text-white uppercase">
+                        {cust.name} — Asset Directory
+                      </h3>
+                      <span className="bg-teal-100 dark:bg-teal-950/80 text-teal-800 dark:text-teal-300 text-[10px] font-black px-2 py-0.5 rounded-full uppercase border border-teal-300 dark:border-teal-800">
+                        {custAssets.length} Registered
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-2 mt-0.5">
+                      <span>Location: <strong>{cust.location}</strong></span>
+                      {cust.contactPerson && <span>• Contact: <strong>{cust.contactPerson}</strong></span>}
+                      {cust.phone && <span>• Tel: <strong>{cust.phone}</strong></span>}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCustomerForAssetsModal(null);
+                    setAssetSearchInModal('');
+                  }}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold p-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Search & Actions Strip */}
+              <div className="flex items-center justify-between gap-3 shrink-0">
+                <div className="relative flex-1 max-w-xs">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                  <input
+                    type="text"
+                    value={assetSearchInModal}
+                    onChange={(e) => setAssetSearchInModal(e.target.value)}
+                    placeholder="Search Serial, Model..."
+                    className="w-full pl-8 pr-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium outline-none focus:ring-1 focus:ring-teal-500"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleOpenAddAsset(cust.name);
+                    setSelectedCustomerForAssetsModal(null);
+                  }}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Register New Asset</span>
+                </button>
+              </div>
+
+              {/* Assets List */}
+              <div className="overflow-y-auto space-y-2.5 flex-1 pr-1">
+                {displayAssets.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500 text-xs bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200">
+                    No equipment registered under this customer.
+                  </div>
+                ) : (
+                  displayAssets.map((ast) => (
+                    <div
+                      key={ast.id}
+                      className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/60 shadow-2xs space-y-2"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono font-black text-teal-800 dark:text-teal-300 text-xs bg-teal-50 dark:bg-teal-950/80 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800">
+                            S/N: {ast.serialNumber}
+                          </span>
+                          <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                            {ast.manufacturer} — {ast.model}
+                          </h4>
+                          <span className="text-[10px] font-bold px-2 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200">
+                            {ast.department}
+                          </span>
+                          {ast.roomNumber && (
+                            <span className="text-[10px] font-mono text-slate-600 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.2 rounded">
+                              Room: {ast.roomNumber}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCustomerForAssetsModal(null);
+                              setActiveTab('new_case');
+                            }}
+                            className="px-2.5 py-1 bg-[#4CAF50] hover:bg-[#43a047] text-white rounded-md text-xs font-bold flex items-center space-x-1 cursor-pointer"
+                          >
+                            <Wrench className="w-3 h-3" />
+                            <span>Create Call</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Specs Row */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800">
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase">Installation Date</div>
+                          <div className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                            {ast.installationDate || 'N/A'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase">Warranty Expiry</div>
+                          <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            {ast.warrantyExpiry || ast.warrantyDuration || 'Under Contract'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase">PPM Frequency</div>
+                          <div className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                            {ast.ppmFrequency || 'None'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase">Next PPM Due</div>
+                          <div className="font-mono font-bold text-orange-600 dark:text-orange-400">
+                            {ast.nextPpmDate || 'Not Scheduled'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCustomerForAssetsModal(null);
+                    setAssetSearchInModal('');
+                  }}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

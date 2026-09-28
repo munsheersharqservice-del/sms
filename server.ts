@@ -267,6 +267,7 @@ Provide a concise, practical, high-value field diagnostic checklist for the fiel
   const stagedRequests: any[] = initialData.requests;
   const stagedCases: any[] = initialData.cases;
   const stagedDoneWork: any[] = initialData.doneWorkLogs;
+  const deletedAssetSerials = new Set<string>();
 
   const persistCurrentState = () => {
     savePersistentData({
@@ -728,7 +729,25 @@ service@sharqmedicalsupply.qa`;
         return { tab: sheetNames[0] || '', rows: [] };
       };
 
-      const [callsRes, eqRes, custRes, engRes, prjRes, reqRes, doneRes, partsRes, licRes] = await Promise.all([
+      const computeNextPpmDateHelper = (baseDateStr: string, frequency: string): string => {
+        if (!baseDateStr || !frequency || frequency === 'None') return '';
+        const date = new Date(baseDateStr);
+        if (isNaN(date.getTime())) return '';
+        const result = new Date(date);
+        const cleanFreq = frequency.toLowerCase();
+        if (cleanFreq.includes('3 month') || cleanFreq.includes('quarter')) {
+          result.setMonth(result.getMonth() + 3);
+        } else if (cleanFreq.includes('6 month') || cleanFreq.includes('routine') || cleanFreq.includes('1st maint')) {
+          result.setMonth(result.getMonth() + 6);
+        } else if (cleanFreq.includes('year') || cleanFreq.includes('annual')) {
+          result.setFullYear(result.getFullYear() + 1);
+        } else {
+          return '';
+        }
+        return result.toISOString().split('T')[0];
+      };
+
+      const [callsRes, eqRes, custRes, engRes, prjRes, reqRes, doneRes, partsRes, licRes, ppmRes] = await Promise.all([
         fetchTabGviz(['Service_Calls', 'Cases', 'Calls', 'ServiceCalls']),
         fetchTabGviz(['Equipment', 'Assets', 'Asset_Registry', 'Machines']),
         fetchTabGviz(['Customers', 'Clients', 'Hospitals']),
@@ -738,6 +757,7 @@ service@sharqmedicalsupply.qa`;
         fetchTabGviz(['DoneWork', 'Done_Work', 'Service_Reports', 'Closed_Calls']),
         fetchTabGviz(['SpareParts', 'Spare_Parts', 'Inventory', 'Store']),
         fetchTabGviz(['SoftwareLicenses', 'Software_Licenses', 'Licenses', 'Software Registry', 'Software'], '1053502553'),
+        fetchTabGviz(['PPM_Schedule', 'PPM Schedule', 'PpmSchedule', 'PPM_Due', 'PPM', 'PPM_Calendar']),
       ]);
 
       const callsRows = callsRes.rows;
@@ -749,6 +769,7 @@ service@sharqmedicalsupply.qa`;
       const doneRows = doneRes.rows;
       const partsRows = partsRes.rows;
       const licRows = licRes.rows;
+      const ppmRows = ppmRes.rows;
 
       // 1. Process Cases / Service Calls
       const cases = callsRows
@@ -856,7 +877,7 @@ service@sharqmedicalsupply.qa`;
         return clean === 'serial number' || clean === 'serial #' || clean === 'serial no' || clean === 'serial' || clean === 's/n' || clean === 'sl no';
       };
 
-      const assets = eqRows
+      let assets = eqRows
         .filter((r) => {
           if (!r || r.length === 0) return false;
           const first = (r[0] || '').trim();
@@ -901,6 +922,84 @@ service@sharqmedicalsupply.qa`;
             createdAt: r[6] || new Date().toISOString(),
           };
         });
+
+      // 3b. 2-WAY LIVE SYNC: Cross-reference & enrich Assets with PPM_Schedule tab data from Excel / Sheets
+      const cleanPpmRows = ppmRows.filter((r) => {
+        if (!r || r.length === 0) return false;
+        const first = (r[0] || '').trim().toLowerCase();
+        return first && !first.includes('serial') && !first.includes('s/n') && !first.includes('sl no');
+      });
+
+      for (const pr of cleanPpmRows) {
+        const serial = (pr[0] || '').toUpperCase().trim();
+        const model = (pr[1] || '').toUpperCase().trim();
+        const mfg = (pr[2] || '').toUpperCase().trim();
+        const cust = (pr[3] || '').toUpperCase().trim();
+        const assetNum = (pr[4] || '').trim();
+        const room = (pr[5] || '').trim();
+        const sec = (pr[6] || '').trim();
+        const freq = (pr[7] || '').trim();
+        let lastPpm = (pr[8] || '').trim();
+        let nextPpm = (pr[9] || '').trim();
+        const statusVal = (pr[10] || '').trim();
+
+        // Guard against cell column shifts
+        if (lastPpm === 'Active' || lastPpm === 'Maintenance' || lastPpm === 'Inactive') {
+          lastPpm = '';
+        }
+        if (!nextPpm && lastPpm && freq && freq !== 'None') {
+          nextPpm = computeNextPpmDateHelper(lastPpm, freq);
+        }
+
+        const matchIdx = assets.findIndex((a) => {
+          const aSn = (a.serialNumber || '').toUpperCase().trim();
+          if (serial && aSn && aSn === serial) return true;
+          return cust && model && (a.customerName || '').toUpperCase().trim() === cust && (a.model || '').toUpperCase().trim() === model;
+        });
+
+        if (matchIdx >= 0) {
+          if (freq && freq !== 'None') assets[matchIdx].ppmFrequency = freq;
+          if (lastPpm) assets[matchIdx].lastPpmDate = lastPpm;
+          if (nextPpm) {
+            assets[matchIdx].nextPpmDate = nextPpm;
+            assets[matchIdx].nextPpmDueDate = nextPpm;
+          }
+          if (statusVal && (statusVal === 'Active' || statusVal === 'Maintenance' || statusVal === 'Inactive')) {
+            assets[matchIdx].status = statusVal;
+          }
+          if (room && !assets[matchIdx].roomNumber) {
+            assets[matchIdx].roomNumber = room;
+            assets[matchIdx].roomWard = room;
+          }
+        } else if (serial || (cust && model)) {
+          // Device exists in PPM_Schedule sheet but wasn't in Equipment sheet -> synthesize as active asset
+          assets.push({
+            id: `ast-ppm-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            serialNumber: serial || `SN-PPM-${assets.length + 1}`,
+            customerName: cust || 'HOSPITAL / CLINIC',
+            customerLocation: 'Doha, Qatar',
+            manufacturer: mfg || 'PLANMECA',
+            model: model || 'Medical Equipment',
+            department: 'Dental',
+            assetNumber: assetNum,
+            installationDate: '2026-01-01',
+            warrantyDuration: '2 Years',
+            warrantyExpiry: '2028-12-31',
+            ppmFrequency: freq || '6 Months',
+            lastPpmDate: lastPpm,
+            nextPpmDate: nextPpm,
+            nextPpmDueDate: nextPpm,
+            roomNumber: room,
+            roomWard: room,
+            sector: resolveCustomerSector(cust, sec),
+            poNumber: '',
+            accessories: [],
+            installationReportLink: '',
+            status: (statusVal === 'Maintenance' || statusVal === 'Inactive') ? statusVal : 'Active',
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
 
       // 4. Process Customers
       const customers = custRows
@@ -1014,16 +1113,33 @@ service@sharqmedicalsupply.qa`;
         }
       }
 
-      // Merge staged assets (staged edits take precedence over remote)
+      // Merge staged assets (staged edits take precedence over remote, excluding deleted)
       for (const staged of stagedAssets) {
         const serial = (staged.serialNumber || '').trim().toUpperCase();
+        if (deletedAssetSerials.has(serial) || deletedAssetSerials.has(staged.id)) {
+          continue;
+        }
         const idx = assets.findIndex((a) => (serial && (a.serialNumber || '').trim().toUpperCase() === serial) || a.id === staged.id);
         if (idx >= 0) {
-          assets[idx] = { ...assets[idx], ...staged };
+          assets[idx] = {
+            ...assets[idx],
+            ...staged,
+            nextPpmDate: staged.nextPpmDate || assets[idx].nextPpmDate,
+            nextPpmDueDate: staged.nextPpmDueDate || staged.nextPpmDate || assets[idx].nextPpmDueDate || assets[idx].nextPpmDate,
+            lastPpmDate: staged.lastPpmDate !== undefined ? staged.lastPpmDate : assets[idx].lastPpmDate,
+            ppmFrequency: (staged.ppmFrequency && staged.ppmFrequency !== 'None') ? staged.ppmFrequency : assets[idx].ppmFrequency,
+            ppmType: staged.ppmType || (assets[idx] as any).ppmType,
+          };
         } else {
           assets.unshift(staged);
         }
       }
+
+      // Filter out any assets that were deleted
+      assets = assets.filter((a) => {
+        const s = (a.serialNumber || '').trim().toUpperCase();
+        return !deletedAssetSerials.has(s) && !deletedAssetSerials.has(a.id);
+      });
 
       // Merge staged customers (staged edits take precedence over remote)
       for (const staged of stagedCustomers) {
@@ -1572,6 +1688,7 @@ service@sharqmedicalsupply.qa`;
         return res.status(400).json({ success: false, error: 'Asset Serial Number or ID is required for update' });
       }
 
+      let sheetsSyncSuccess = false;
       let updatedAsset: any = null;
       const existingIndex = stagedAssets.findIndex(
         (a) =>
@@ -1611,10 +1728,32 @@ service@sharqmedicalsupply.qa`;
         stagedAssets.unshift(updatedAsset);
       }
 
+      // Webhook fallback or primary live Google Apps Script trigger
+      const webhookUrl = (req.headers['x-sheets-webhook'] as string) || process.env.GOOGLE_APPS_SCRIPT_URL;
+      let webhookForwarded = false;
+      if (webhookUrl && webhookUrl.startsWith('http')) {
+        try {
+          const hookRes = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'update_asset',
+              data: updatedAsset,
+              timestamp: new Date().toISOString(),
+            }),
+          });
+          webhookForwarded = hookRes.ok;
+          if (webhookForwarded) {
+            sheetsSyncSuccess = true;
+          }
+        } catch (hookErr: any) {
+          console.warn('Asset update webhook forwarding note:', hookErr.message);
+        }
+      }
+
       // Forward to Google Sheets API if OAuth token is present
       const authHeader = req.headers.authorization;
       const sheetId = (req.query.sheetId as string) || '1q20EnJj-uyT-iGOS-h3kCkAXP7HAiADDtIeNdOsIT9A';
-      let sheetsSyncSuccess = false;
 
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.replace('Bearer ', '').trim();
@@ -1641,7 +1780,7 @@ service@sharqmedicalsupply.qa`;
 
           // 1. Update Equipment sheet
           for (const tab of ['Equipment', 'Assets']) {
-            const checkRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tab}!A:A`, {
+            const checkRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tab)}!A:A`, {
               headers: { Authorization: `Bearer ${token}` },
             });
 
@@ -1656,7 +1795,7 @@ service@sharqmedicalsupply.qa`;
               );
               if (rIdx >= 0) {
                 const rNum = rIdx + 1;
-                const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tab}!A${rNum}:Q${rNum}?valueInputOption=USER_ENTERED`, {
+                const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tab)}!A${rNum}:Q${rNum}?valueInputOption=USER_ENTERED`, {
                   method: 'PUT',
                   headers: {
                     Authorization: `Bearer ${token}`,
@@ -1670,7 +1809,7 @@ service@sharqmedicalsupply.qa`;
                 });
                 sheetsSyncSuccess = updateRes.ok;
               } else {
-                const appendRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tab}!A:Q:append?valueInputOption=USER_ENTERED`, {
+                const appendRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tab)}!A:Q:append?valueInputOption=USER_ENTERED`, {
                   method: 'POST',
                   headers: {
                     Authorization: `Bearer ${token}`,
@@ -1687,59 +1826,63 @@ service@sharqmedicalsupply.qa`;
             }
           }
 
-          // 2. If PPM frequency set, update PPM_Schedule
-          if (updatedAsset.ppmFrequency && updatedAsset.ppmFrequency !== 'None') {
+          // 2. Update PPM_Schedule tab if PPM frequency, last PPM, or next PPM is set
+          if ((updatedAsset.ppmFrequency && updatedAsset.ppmFrequency !== 'None') || updatedAsset.nextPpmDate || updatedAsset.lastPpmDate) {
             const ppmRow = [
-              updatedAsset.serialNumber,
-              updatedAsset.model,
-              updatedAsset.manufacturer,
-              updatedAsset.customerName,
+              updatedAsset.serialNumber || '',
+              updatedAsset.model || '',
+              updatedAsset.manufacturer || '',
+              updatedAsset.customerName || '',
               updatedAsset.assetNumber || '',
               updatedAsset.roomNumber || '',
               updatedAsset.sector || 'Private',
-              updatedAsset.ppmFrequency,
+              updatedAsset.ppmFrequency || '6 Months',
               updatedAsset.lastPpmDate || '',
               updatedAsset.nextPpmDate || '',
               updatedAsset.status || 'Active',
             ];
-            const ppmCheckRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/PPM_Schedule!A:A`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            if (ppmCheckRes.ok) {
-              const ppmData = await ppmCheckRes.json();
-              const ppmRows: string[][] = ppmData.values || [];
-              const pIdx = ppmRows.findIndex(
-                (r) => r[0] && (
-                  r[0].toString().trim().toUpperCase() === origSerial ||
-                  r[0].toString().trim().toUpperCase() === targetSerial
-                )
-              );
-              if (pIdx >= 0) {
-                const pNum = pIdx + 1;
-                await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/PPM_Schedule!A${pNum}:K${pNum}?valueInputOption=USER_ENTERED`, {
-                  method: 'PUT',
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    range: `PPM_Schedule!A${pNum}:K${pNum}`,
-                    majorDimension: 'ROWS',
-                    values: [ppmRow],
-                  }),
-                });
-              } else {
-                await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/PPM_Schedule!A:K:append?valueInputOption=USER_ENTERED`, {
-                  method: 'POST',
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    majorDimension: 'ROWS',
-                    values: [ppmRow],
-                  }),
-                });
+
+            for (const ppmTab of ['PPM_Schedule', 'PPM Schedule', 'PpmSchedule', 'PPM']) {
+              const ppmCheckRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ppmTab)}!A:A`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (ppmCheckRes.ok) {
+                const ppmData = await ppmCheckRes.json();
+                const ppmRows: string[][] = ppmData.values || [];
+                const pIdx = ppmRows.findIndex(
+                  (r) => r[0] && (
+                    r[0].toString().trim().toUpperCase() === origSerial ||
+                    r[0].toString().trim().toUpperCase() === targetSerial
+                  )
+                );
+                if (pIdx >= 0) {
+                  const pNum = pIdx + 1;
+                  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ppmTab)}!A${pNum}:K${pNum}?valueInputOption=USER_ENTERED`, {
+                    method: 'PUT',
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      range: `${ppmTab}!A${pNum}:K${pNum}`,
+                      majorDimension: 'ROWS',
+                      values: [ppmRow],
+                    }),
+                  });
+                } else {
+                  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ppmTab)}!A:K:append?valueInputOption=USER_ENTERED`, {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      majorDimension: 'ROWS',
+                      values: [ppmRow],
+                    }),
+                  });
+                }
+                break;
               }
             }
           }
@@ -1754,10 +1897,42 @@ service@sharqmedicalsupply.qa`;
         success: true,
         asset: updatedAsset,
         googleSheetsUpdated: sheetsSyncSuccess,
+        webhookForwarded,
         totalAssetsInServer: stagedAssets.length,
       });
     } catch (err: any) {
       console.error('Update asset error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // POST /api/assets/delete: Delete asset from staged registry & server memory
+  app.post('/api/assets/delete', (req, res) => {
+    try {
+      const { id, serialNumber } = req.body;
+      const targetSerial = (serialNumber || '').trim().toUpperCase();
+      const targetId = (id || '').trim();
+
+      if (targetSerial) {
+        deletedAssetSerials.add(targetSerial);
+      }
+      if (targetId) {
+        deletedAssetSerials.add(targetId);
+      }
+
+      const idx = stagedAssets.findIndex(
+        (a) =>
+          (targetSerial && (a.serialNumber || '').trim().toUpperCase() === targetSerial) ||
+          (targetId && a.id === targetId)
+      );
+      if (idx >= 0) {
+        stagedAssets.splice(idx, 1);
+      }
+
+      persistCurrentState();
+
+      return res.json({ success: true, message: 'Asset deleted from server' });
+    } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }
   });

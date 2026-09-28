@@ -569,8 +569,8 @@ export async function appendAssetToSheet(
     }
   }
 
-  // Also handle PPM_Schedule tab if PPM frequency is configured
-  if (asset.ppmFrequency && asset.ppmFrequency !== 'None') {
+  // Also handle PPM_Schedule tab if PPM frequency or schedule date is configured
+  if ((asset.ppmFrequency && asset.ppmFrequency !== 'None') || asset.nextPpmDate || asset.lastPpmDate) {
     const ppmCandidates = ['PPM_Schedule', 'PPM Schedule', 'PPM', 'PPM_Calendar'];
     const matchedPpmTab = matchTabName(existingTabs, ppmCandidates, 'PPM_Schedule');
     if (!existingTabs.some(t => t.toLowerCase() === matchedPpmTab.toLowerCase())) {
@@ -578,29 +578,38 @@ export async function appendAssetToSheet(
     }
 
     const ppmRow = [
-      asset.serialNumber,
-      asset.model,
-      asset.manufacturer,
-      asset.customerName,
+      asset.serialNumber || '',
+      asset.model || '',
+      asset.manufacturer || '',
+      asset.customerName || '',
       asset.assetNumber || '',
       asset.roomNumber || '',
       asset.sector || 'Private',
-      asset.ppmFrequency,
+      asset.ppmFrequency || '6 Months',
       asset.lastPpmDate || '',
-      asset.nextPpmDate || '',
+      asset.nextPpmDate || (asset as any).nextPpmDueDate || '',
       asset.status || 'Active',
     ];
 
     try {
       const ppmGetRes = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/${encodeURIComponent(matchedPpmTab)}!A:A`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/${encodeURIComponent(matchedPpmTab)}!A:D`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       if (ppmGetRes.ok) {
         const ppmData = await ppmGetRes.json();
         const ppmRows: string[][] = ppmData.values || [];
+        const targetCust = (asset.customerName || '').trim().toUpperCase();
+        const targetModel = (asset.model || '').trim().toUpperCase();
+
         const ppmIdx = ppmRows.findIndex(
-          (r) => r[0] && r[0].toString().trim().toUpperCase() === targetSerial
+          (r) =>
+            r[0] &&
+            (r[0].toString().trim().toUpperCase() === origSerial ||
+              r[0].toString().trim().toUpperCase() === targetSerial ||
+              (targetCust && targetModel && r[3] && r[1] &&
+                r[3].toString().trim().toUpperCase() === targetCust &&
+                r[1].toString().trim().toUpperCase() === targetModel))
         );
         if (ppmIdx >= 0) {
           const ppmRowNum = ppmIdx + 1;
@@ -621,7 +630,7 @@ export async function appendAssetToSheet(
           );
         } else {
           await fetch(
-            `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/${encodeURIComponent(matchedPpmTab)}!A1:append?valueInputOption=USER_ENTERED`,
+            `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}/values/${encodeURIComponent(matchedPpmTab)}!A:K:append?valueInputOption=USER_ENTERED`,
             {
               method: 'POST',
               headers: {
@@ -629,7 +638,7 @@ export async function appendAssetToSheet(
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                range: `${matchedPpmTab}!A1`,
+                range: `${matchedPpmTab}!A:K`,
                 majorDimension: 'ROWS',
                 values: [ppmRow],
               }),
@@ -807,7 +816,7 @@ export async function exportAllToGoogleSheets(
   const ppmRows = [
     ppmHeader,
     ...data.assets
-      .filter((a) => a.ppmFrequency && a.ppmFrequency !== 'None')
+      .filter((a) => (a.ppmFrequency && a.ppmFrequency !== 'None') || a.nextPpmDate || (a as any).nextPpmDueDate)
       .map((a) => [
         a.serialNumber,
         a.model,
@@ -816,9 +825,9 @@ export async function exportAllToGoogleSheets(
         a.assetNumber || '',
         a.roomNumber || '',
         a.sector || 'Private',
-        a.ppmFrequency,
+        a.ppmFrequency || '6 Months',
         a.lastPpmDate || '',
-        a.nextPpmDate || '',
+        a.nextPpmDate || (a as any).nextPpmDueDate || '',
         a.status || 'Active',
       ]),
   ];
@@ -1426,7 +1435,7 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
     return [];
   };
 
-  const [callsRows, eqRows, custRows, engRows, prjRows, reqRows, licRows, partsRows, mfgRows] = await Promise.all([
+  const [callsRows, eqRows, custRows, engRows, prjRows, reqRows, licRows, partsRows, mfgRows, ppmRows] = await Promise.all([
     fetchTabGviz(['Service_Calls', 'Cases', 'Calls', 'ServiceCalls']),
     fetchTabGviz(['Equipment', 'Assets', 'Asset_Registry', 'Machines']),
     fetchTabGviz(['Customers', 'Clients', 'Hospitals']),
@@ -1436,6 +1445,7 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
     fetchTabGviz(['SoftwareLicenses', 'Software_Licenses', 'Licenses', 'Software Registry'], SOFTWARE_REGISTRY_GID),
     fetchTabGviz(['Spare_Parts', 'SpareParts', 'Parts', 'Inventory']),
     fetchTabGviz(['Manufacturers_Models', 'Manufacturers', 'Models', 'Manufacturer_Models']),
+    fetchTabGviz(['PPM_Schedule', 'PPM Schedule', 'PpmSchedule', 'PPM_Due', 'PPM', 'PPM_Calendar']),
   ]);
 
   const seenTicketIds = new Set<string>();
@@ -1608,6 +1618,79 @@ export async function fetchLiveDataFromGoogleSheets(spreadsheetId: string = DEFA
         createdAt: installDate || new Date().toISOString(),
       };
     });
+
+  // Cross-reference & enrich Assets with PPM_Schedule tab data from live Excel / Sheets
+  const cleanPpmRows = ppmRows.filter((r) => {
+    if (!r || r.length === 0) return false;
+    const first = (r[0] || '').trim().toLowerCase();
+    return first && !first.includes('serial') && !first.includes('s/n') && !first.includes('sl no');
+  });
+
+  for (const pr of cleanPpmRows) {
+    const serial = (pr[0] || '').toUpperCase().trim();
+    const model = (pr[1] || '').toUpperCase().trim();
+    const mfg = (pr[2] || '').toUpperCase().trim();
+    const cust = (pr[3] || '').toUpperCase().trim();
+    const assetNum = (pr[4] || '').trim();
+    const room = (pr[5] || '').trim();
+    const sec = (pr[6] || '').trim();
+    const freq = (pr[7] || '').trim();
+    let lastPpm = (pr[8] || '').trim();
+    let nextPpm = (pr[9] || '').trim();
+    const statusVal = (pr[10] || '').trim();
+
+    if (lastPpm === 'Active' || lastPpm === 'Maintenance' || lastPpm === 'Inactive') {
+      lastPpm = '';
+    }
+
+    const matchIdx = assets.findIndex((a) => {
+      const aSn = (a.serialNumber || '').toUpperCase().trim();
+      if (serial && aSn && aSn === serial) return true;
+      return cust && model && (a.customerName || '').toUpperCase().trim() === cust && (a.model || '').toUpperCase().trim() === model;
+    });
+
+    if (matchIdx >= 0) {
+      if (freq && freq !== 'None') assets[matchIdx].ppmFrequency = freq as any;
+      if (lastPpm) assets[matchIdx].lastPpmDate = lastPpm;
+      if (nextPpm) {
+        assets[matchIdx].nextPpmDate = nextPpm;
+        assets[matchIdx].nextPpmDueDate = nextPpm;
+      }
+      if (statusVal && (statusVal === 'Active' || statusVal === 'Maintenance' || statusVal === 'Inactive')) {
+        assets[matchIdx].status = statusVal as any;
+      }
+      if (room && !assets[matchIdx].roomNumber) {
+        assets[matchIdx].roomNumber = room;
+        assets[matchIdx].roomWard = room;
+      }
+    } else if (serial || (cust && model)) {
+      const serialSlug = (serial || 'ppm').replace(/[^A-Z0-9]/g, '_').toLowerCase();
+      assets.push({
+        id: `ast-sheet-ppm-${serialSlug}-${Date.now()}`,
+        serialNumber: serial || `SN-PPM-${assets.length + 1}`,
+        customerName: cust || 'HOSPITAL / CLINIC',
+        customerLocation: 'Doha, Qatar',
+        manufacturer: mfg || 'PLANMECA',
+        model: model || 'Medical Equipment',
+        department: 'Dental',
+        assetNumber: assetNum,
+        installationDate: '2026-01-01',
+        warrantyDuration: '2 Years',
+        warrantyExpiry: '2028-12-31',
+        ppmFrequency: (freq || '6 Months') as any,
+        lastPpmDate: lastPpm,
+        nextPpmDate: nextPpm,
+        nextPpmDueDate: nextPpm,
+        roomWard: room,
+        sector: resolveCustomerSector(cust, sec as any),
+        poNumber: '',
+        accessories: [],
+        installationReportLink: '',
+        status: (statusVal === 'Maintenance' || statusVal === 'Inactive') ? statusVal as any : 'Active',
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
 
   const seenCustIds = new Set<string>();
   const customers = custRows

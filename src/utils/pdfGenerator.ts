@@ -424,3 +424,146 @@ export const generatePpmSchedulePdf = (
   doc.save(`Sharq_PPM_Schedule_${cleanDate}.pdf`);
 };
 
+export const generateWarrantyReportPdf = (
+  warrantyAssets: Asset[],
+  monthFocus = 'All Months'
+) => {
+  const doc = new jsPDF('landscape', 'mm', 'a4'); // A4 Landscape: 297mm x 210mm
+
+  // Header Banner - Deep Indigo & Sharq Orange Accent
+  doc.setFillColor(29, 53, 87); // Deep Blue #1D3557
+  doc.rect(0, 0, 297, 24, 'F');
+  doc.setFillColor(242, 101, 34); // Sharq Orange #F26522
+  doc.rect(0, 24, 297, 3, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('SHARQ MEDICAL SUPPLY W.L.L. - WARRANTY & CONTRACT EXPIRY REPORT', 14, 11);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(
+    `EQUIPMENT WARRANTY EXPIRATION & AMC/CMC SERVICE CONTRACT RENEWAL SCHEDULE | STATE OF QATAR`,
+    14,
+    18
+  );
+
+  doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 235, 11);
+  doc.text(`Month Focus: ${monthFocus}`, 235, 18);
+
+  // Summary Metrics Bar
+  let y = 33;
+  doc.setFillColor(248, 249, 250);
+  doc.rect(14, y, 269, 14, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.rect(14, y, 269, 14, 'S');
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const expiredCount = warrantyAssets.filter((a) => {
+    if (!a.warrantyExpiry) return false;
+    return new Date(a.warrantyExpiry) < now;
+  }).length;
+
+  const thisMonthCount = warrantyAssets.filter((a) => {
+    if (!a.warrantyExpiry) return false;
+    const d = new Date(a.warrantyExpiry);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).length;
+
+  const activeCount = warrantyAssets.length - expiredCount;
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text(`TOTAL MONITORED DEVICES: ${warrantyAssets.length}`, 18, y + 9);
+
+  doc.setTextColor(234, 88, 12);
+  doc.text(`EXPIRING THIS MONTH: ${thisMonthCount}`, 105, y + 9);
+
+  doc.setTextColor(225, 29, 72);
+  doc.text(`EXPIRED / CONTRACT RENEWAL: ${expiredCount}`, 175, y + 9);
+
+  doc.setTextColor(13, 148, 136);
+  doc.text(`ACTIVE UNDER WARRANTY: ${activeCount}`, 240, y + 9);
+
+  // Table Headers
+  y = 52;
+  doc.setFillColor(241, 245, 249);
+  doc.rect(14, y, 269, 9, 'F');
+  doc.setDrawColor(203, 213, 225);
+  doc.rect(14, y, 269, 9, 'S');
+
+  doc.setTextColor(51, 65, 85);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('SERIAL NO.', 18, y + 6);
+  doc.text('EQUIPMENT / MODEL', 52, y + 6);
+  doc.text('CUSTOMER / FACILITY', 115, y + 6);
+  doc.text('DEPARTMENT', 180, y + 6);
+  doc.text('INSTALL DATE', 215, y + 6);
+  doc.text('WARRANTY EXPIRY', 248, y + 6);
+
+  // Table Rows
+  y += 9;
+  doc.setFontSize(8);
+
+  const displayList = warrantyAssets.slice(0, 18);
+
+  if (displayList.length === 0) {
+    doc.setTextColor(100, 116, 139);
+    doc.setFont('helvetica', 'italic');
+    doc.text('No equipment records found matching the warranty expiry criteria.', 105, y + 10);
+  } else {
+    displayList.forEach((ast, index) => {
+      if (index % 2 === 0) {
+        doc.setFillColor(255, 255, 255);
+      } else {
+        doc.setFillColor(248, 250, 252);
+      }
+      doc.rect(14, y, 269, 7.5, 'F');
+      doc.setDrawColor(241, 245, 249);
+      doc.rect(14, y, 269, 7.5, 'S');
+
+      const isPast = ast.warrantyExpiry && new Date(ast.warrantyExpiry) < now;
+      doc.setTextColor(isPast ? 225 : 15, isPast ? 29 : 23, isPast ? 72 : 42);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text(ast.serialNumber || 'N/A', 18, y + 5);
+
+      doc.setFont('helvetica', 'normal');
+      const modelStr = `${ast.model || ''} (${ast.manufacturer || ''})`.substring(0, 32);
+      doc.text(modelStr, 52, y + 5);
+
+      const custStr = `${ast.customerName || ''}`.substring(0, 32);
+      doc.text(custStr, 115, y + 5);
+
+      doc.text(ast.department || 'Medical', 180, y + 5);
+      doc.text(ast.installationDate || 'N/A', 215, y + 5);
+
+      doc.setFont('helvetica', isPast ? 'bold' : 'normal');
+      const expiryText = ast.warrantyExpiry ? (isPast ? `${ast.warrantyExpiry} (EXPIRED)` : ast.warrantyExpiry) : 'Under Contract';
+      doc.text(expiryText, 248, y + 5);
+
+      y += 7.5;
+    });
+  }
+
+  // Footer
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text(
+    `Sharq Medical Supply W.L.L. • Biomedical & Dental Service Division • Doha, Qatar • Tel: +974 4400 1234 • Generated on ${new Date().toLocaleString()}`,
+    14,
+    202
+  );
+
+  const cleanDate = new Date().toISOString().split('T')[0];
+  const pdfBlob = doc.output('blob');
+  uploadAttachmentToGoogleDrive(pdfBlob, `Warranty_Ending_${cleanDate}.pdf`, 'Attachment').catch(() => {});
+
+  doc.save(`Sharq_Warranty_Report_${cleanDate}.pdf`);
+};
+

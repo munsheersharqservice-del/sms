@@ -127,6 +127,8 @@ interface AppContextType {
   // Active view control
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
+  ppmViewMode: 'PPM_SCHEDULE' | 'WARRANTY_EXPIRING';
+  setPpmViewMode: (mode: 'PPM_SCHEDULE' | 'WARRANTY_EXPIRING') => void;
 
   // Dashboard drill-down filters
   dashboardCaseFilter: 'ALL' | 'NEW' | 'PENDING' | 'RUNNING' | 'DONE';
@@ -746,6 +748,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
+  const [ppmViewMode, setPpmViewMode] = useState<'PPM_SCHEDULE' | 'WARRANTY_EXPIRING'>('PPM_SCHEDULE');
   const [dashboardCaseFilter, setDashboardCaseFilter] = useState<'ALL' | 'NEW' | 'PENDING' | 'RUNNING' | 'DONE'>('ALL');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
@@ -779,28 +782,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 6. Assets / Equipment (Single Source of Truth: Live Database / Excel)
   const [assets, setAssets] = useState<Asset[]>(() => {
     try {
+      const deletedSnsRaw = localStorage.getItem('sharq_deleted_asset_sns');
+      const deletedSns: string[] = deletedSnsRaw ? JSON.parse(deletedSnsRaw) : [];
+      const isDeleted = (sn?: string, id?: string) => {
+        const cleanSn = (sn || '').trim().toUpperCase();
+        return Boolean((cleanSn && deletedSns.includes(cleanSn)) || (id && deletedSns.includes(id)));
+      };
+
       const saved = localStorage.getItem('sharq_v3_assets');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const map = new Map<string, Asset>();
-          INITIAL_ASSETS.forEach((a) => map.set((a.serialNumber || '').trim().toUpperCase(), a));
+          INITIAL_ASSETS.forEach((a) => {
+            if (!isDeleted(a.serialNumber, a.id)) {
+              map.set((a.serialNumber || '').trim().toUpperCase(), a);
+            }
+          });
           parsed.forEach((a: Asset) => {
-            const s = (a.serialNumber || '').trim().toUpperCase();
-            const init = map.get(s);
-            const nextPpm = a.nextPpmDate || a.nextPpmDueDate || init?.nextPpmDate || init?.nextPpmDueDate || '';
-            map.set(s, {
-              ...init,
-              ...a,
-              nextPpmDate: nextPpm,
-              nextPpmDueDate: nextPpm,
-              ppmFrequency: (a.ppmFrequency && a.ppmFrequency !== 'None') ? a.ppmFrequency : (init?.ppmFrequency || 'None'),
-              ppmType: a.ppmType || init?.ppmType || '1st Maint',
-            });
+            if (!isDeleted(a.serialNumber, a.id)) {
+              const s = (a.serialNumber || '').trim().toUpperCase();
+              const init = map.get(s);
+              const nextPpm = a.nextPpmDate || a.nextPpmDueDate || init?.nextPpmDate || init?.nextPpmDueDate || '';
+              map.set(s, {
+                ...init,
+                ...a,
+                nextPpmDate: nextPpm,
+                nextPpmDueDate: nextPpm,
+                ppmFrequency: (a.ppmFrequency && a.ppmFrequency !== 'None') ? a.ppmFrequency : (init?.ppmFrequency || 'None'),
+                ppmType: a.ppmType || init?.ppmType || '1st Maint',
+              });
+            }
           });
           return sanitizeAssetList(Array.from(map.values()));
         }
       }
+      return sanitizeAssetList(INITIAL_ASSETS.filter((a) => !isDeleted(a.serialNumber, a.id)));
     } catch {}
     return sanitizeAssetList(INITIAL_ASSETS);
   });
@@ -1703,11 +1720,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const activeSheetId = currentSpreadsheetId || DEFAULT_SPREADSHEET_ID;
 
-        // 1. Post to Server Live Update Registry with originalSerialNumber for precise row matching
+        const webhookUrl = localStorage.getItem('sharq_sheets_webhook_url') || '';
+
+        // 1. Post to Server Live Update Registry with originalSerialNumber and webhook for live sync
         fetch(`/api/assets/update?sheetId=${encodeURIComponent(activeSheetId)}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(webhookUrl ? { 'x-sheets-webhook': webhookUrl } : {}),
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
@@ -1723,6 +1743,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             originalSerialNumber: origSn || existing?.serialNumber || assetToSync.serialNumber,
           } as any);
           if (updated) {
+            setLastSyncedAt(new Date());
             setSheetsSyncStatus(`Asset S/N "${assetToSync.serialNumber}" updated live in Excel & Google Sheet!`);
             setTimeout(() => setSheetsSyncStatus(null), 4000);
           } else {
@@ -1730,7 +1751,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setTimeout(() => setSheetsSyncStatus(null), 4000);
           }
         } else {
-          setSheetsSyncStatus(`Asset S/N "${assetToSync.serialNumber}" updated locally. Connect Google Account to sync live with Excel/Sheet.`);
+          setSheetsSyncStatus(`Asset S/N "${assetToSync.serialNumber}" updated in portal & database. Connect Google Account to sync live with Excel/Sheet.`);
           setTimeout(() => setSheetsSyncStatus(null), 4000);
         }
       } catch (e: any) {
@@ -1739,8 +1760,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const deleteAsset = (id: string) => {
-    setAssets((prev) => prev.filter((a) => a.id !== id));
+  const deleteAsset = (idOrSn: string) => {
+    const target = assets.find(
+      (a) => a.id === idOrSn || (a.serialNumber && a.serialNumber.trim().toUpperCase() === idOrSn.trim().toUpperCase())
+    );
+    const targetId = target?.id || idOrSn;
+    const targetSn = (target?.serialNumber || '').trim().toUpperCase();
+
+    // 1. Record in deleted serial numbers set so INITIAL_ASSETS never resurrects it
+    try {
+      const deletedSnsRaw = localStorage.getItem('sharq_deleted_asset_sns');
+      const deletedSns: string[] = deletedSnsRaw ? JSON.parse(deletedSnsRaw) : [];
+      if (targetSn && !deletedSns.includes(targetSn)) {
+        deletedSns.push(targetSn);
+      }
+      if (targetId && !deletedSns.includes(targetId)) {
+        deletedSns.push(targetId);
+      }
+      localStorage.setItem('sharq_deleted_asset_sns', JSON.stringify(deletedSns));
+    } catch {}
+
+    // 2. Filter state and update localStorage immediately
+    setAssets((prev) => {
+      const updated = prev.filter(
+        (a) => a.id !== targetId && (!targetSn || a.serialNumber.trim().toUpperCase() !== targetSn)
+      );
+      try {
+        localStorage.setItem('sharq_v3_assets', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    // 3. Post to backend server endpoint
+    fetch('/api/assets/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: targetId, serialNumber: targetSn, model: target?.model }),
+    }).catch(() => {});
+
+    // 4. Update sync status
+    const label = target ? `${target.model} (${target.serialNumber})` : targetSn || targetId;
+    setSheetsSyncStatus(`Equipment "${label}" permanently deleted.`);
+    setTimeout(() => setSheetsSyncStatus(null), 4000);
   };
 
   // Case actions (Tickets start at 202601)
@@ -1826,7 +1887,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       sector: resolveCustomerSector(cleanCust, caseData.sector),
       serialNumber: caseData.serialNumber ? caseData.serialNumber.trim().toUpperCase() : '',
       model: caseData.model ? caseData.model.trim().toUpperCase() : '',
-      createdAt: now,
+      createdAt: (caseData as any).createdAt || now,
       updatedAt: now,
     };
 
@@ -2993,6 +3054,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         disconnectGoogle,
         activeTab,
         setActiveTab,
+        ppmViewMode,
+        setPpmViewMode,
         dashboardCaseFilter,
         setDashboardCaseFilter,
         selectedProjectId,

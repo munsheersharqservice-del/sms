@@ -96,6 +96,27 @@ export function exportDatabaseToExcel(data: {
   wsAssets['!cols'] = calculateColWidths(assetsData);
   XLSX.utils.book_append_sheet(wb, wsAssets, 'Equipment_Assets');
 
+  // 2b. PPM Schedule Sheet (Mirrors Master Google Sheets PPM_Schedule)
+  const ppmAssets = data.assets.filter(
+    (a) => (a.ppmFrequency && a.ppmFrequency !== 'None') || a.nextPpmDate || (a as any).nextPpmDueDate
+  );
+  const ppmData = ppmAssets.map((a) => ({
+    'Serial Number': (a.serialNumber || '').toUpperCase().trim(),
+    'Equipment Model': a.model || '',
+    'Manufacturer': a.manufacturer || '',
+    'Customer Name': (a.customerName || '').toUpperCase().trim(),
+    'Hospital Asset / HBE #': a.assetNumber || '',
+    'Room Number': a.roomNumber || '',
+    'Sector': a.sector || 'Private',
+    'PPM Frequency': a.ppmFrequency || '6 Months',
+    'Last PPM Date': a.lastPpmDate || '',
+    'Next PPM Due Date': a.nextPpmDate || (a as any).nextPpmDueDate || '',
+    'Status': a.status || 'Active',
+  }));
+  const wsPpm = XLSX.utils.json_to_sheet(ppmData);
+  wsPpm['!cols'] = calculateColWidths(ppmData);
+  XLSX.utils.book_append_sheet(wb, wsPpm, 'PPM_Schedule');
+
   // 3. Completed Work Logs Sheet (Arranged and Cleaned)
   const workData = data.doneWorkLogs.map((d) => ({
     'Ticket / Case #': d.ticketNumber || d.caseNumber || '',
@@ -231,5 +252,29 @@ export function exportCasesToExcel(cases: ServiceCase[]) {
   ws['!cols'] = calculateColWidths(casesData);
   XLSX.utils.book_append_sheet(wb, ws, 'Service_Calls');
   XLSX.writeFile(wb, `Sharq_Service_Cases_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+export function exportPpmToExcel(assets: Asset[], title: string = 'Sharq_Medical_PPM_Schedule') {
+  const wb = XLSX.utils.book_new();
+  const ppmAssets = assets.filter(
+    (a) => (a.ppmFrequency && a.ppmFrequency !== 'None') || a.nextPpmDate || (a as any).nextPpmDueDate
+  );
+  const ppmData = ppmAssets.map((a) => ({
+    'Serial Number': (a.serialNumber || '').toUpperCase().trim(),
+    'Equipment Model': a.model || '',
+    'Manufacturer': a.manufacturer || '',
+    'Customer Name': (a.customerName || '').toUpperCase().trim(),
+    'Hospital Asset / HBE #': a.assetNumber || '',
+    'Room Number': a.roomNumber || '',
+    'Sector': a.sector || 'Private',
+    'PPM Frequency': a.ppmFrequency || '6 Months',
+    'Last PPM Date': a.lastPpmDate || '',
+    'Next PPM Due Date': a.nextPpmDate || (a as any).nextPpmDueDate || '',
+    'Status': a.status || 'Active',
+  }));
+  const ws = XLSX.utils.json_to_sheet(ppmData);
+  ws['!cols'] = calculateColWidths(ppmData);
+  XLSX.utils.book_append_sheet(wb, ws, 'PPM_Schedule');
+  XLSX.writeFile(wb, `${title}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 

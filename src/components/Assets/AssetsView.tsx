@@ -17,12 +17,10 @@ import {
   Sparkles,
   ExternalLink,
   Layers,
-  FileSpreadsheet,
   Server,
   KeyRound,
   Copy,
   Check,
-  RefreshCw,
   SlidersHorizontal,
   MapPin,
   Laptop,
@@ -33,7 +31,6 @@ import {
   Building2,
   Paperclip,
   Download,
-  UploadCloud,
   ChevronDown,
   ChevronUp,
   Settings,
@@ -66,18 +63,10 @@ export const AssetsView: React.FC = () => {
     setSelectedAssetForCase,
     setActiveTab,
     softwareLicenses,
-    refreshSoftwareLicensesFromExcel,
-    refreshFromGoogleSheets,
-    isSyncingSheets,
     sheetsSyncStatus,
-    exportToGoogleSheets,
-    isGoogleConnected,
-    connectGoogle,
-    currentSpreadsheetUrl,
     isAdmin,
   } = useApp();
 
-  const [isExportingAll, setIsExportingAll] = useState(false);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [searchInput, setSearchInput] = useState<string>(assetSearchQuery || '');
   const [showFiltersList, setShowFiltersList] = useState<boolean>(false);
@@ -87,6 +76,7 @@ export const AssetsView: React.FC = () => {
   const [softwareOnlyFilter, setSoftwareOnlyFilter] = useState<boolean>(false);
   const [warrantyFilter, setWarrantyFilter] = useState<string>('ALL'); // ALL, ACTIVE, EXPIRED
   const [selectedAssetForDetails, setSelectedAssetForDetails] = useState<Asset | null>(null);
+  const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
 
   const effectiveSubTab = isAdmin ? assetSubTab : 'search';
@@ -312,150 +302,63 @@ export const AssetsView: React.FC = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. SUB BAR: VIEW SWITCHER TABS & ACTIONS - Admin only                     */}
+      {/* 2. SUB BAR: VIEW SWITCHER TABS & SETTINGS - Admin only                    */}
       {/* ========================================================================= */}
       {isAdmin && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-3.5 shadow-xs border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-2.5 sm:p-3 shadow-xs border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
           {/* Left: View Switcher Tabs */}
-          <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200 overflow-x-auto no-scrollbar">
+          <div className="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-lg border border-slate-200 dark:border-slate-700 overflow-x-auto no-scrollbar">
             <button
               type="button"
               onClick={() => setAssetSubTab('search')}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 assetSubTab === 'search'
-                  ? 'bg-white text-teal-800 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-700 text-teal-800 dark:text-teal-300 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <span className="flex items-center gap-1.5">
-                <HardDrive className="w-3.5 h-3.5 text-teal-600" />
-                <span>Equipment Directory ({assets.length})</span>
-              </span>
+              <HardDrive className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+              <span>Equipment Directory ({assets.length})</span>
             </button>
 
             <button
               type="button"
               onClick={() => setAssetSubTab('software_dir')}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 assetSubTab === 'software_dir'
-                  ? 'bg-white text-indigo-800 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-800 dark:text-indigo-300 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <span className="flex items-center gap-1.5">
-                <Server className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Software Registry ({softwareLicenses.length})</span>
-              </span>
+              <Server className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span>Software Registry ({softwareLicenses.length})</span>
             </button>
 
             <button
               type="button"
               onClick={() => setAssetSubTab('customers')}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 assetSubTab === 'customers'
-                  ? 'bg-white text-emerald-800 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-700 text-emerald-800 dark:text-emerald-300 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <span className="flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Customers Database ({customers.length})</span>
-              </span>
+              <Building2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Customers Database ({customers.length})</span>
             </button>
           </div>
 
-          {/* Right: Small & Compact Add Actions + Excel Link + Sync */}
-          <div className="flex items-center space-x-2">
-            {/* SMALL ADD ASSET BUTTON */}
+          {/* Right: Keep only Settings as requested */}
+          <div className="flex items-center shrink-0">
             <button
               type="button"
-              onClick={() => handleOpenSideDrawerAddAsset()}
-              className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
-              title="Add New Equipment via Side Window"
+              onClick={() => setIsSheetsModalOpen(true)}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 shadow-2xs"
+              title="Google Sheets & Webhook Settings"
             >
-              <Plus className="w-3.5 h-3.5 text-teal-600" />
-              <span>+ Asset</span>
+              <Settings className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <span className="hidden sm:inline">Settings</span>
             </button>
-
-            {/* SMALL ADD SOFTWARE BUTTON */}
-            <button
-              type="button"
-              onClick={() => handleOpenSideDrawerAddSoftware()}
-              className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-300 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
-              title="Add New Software License via Side Window"
-            >
-              <Plus className="w-3.5 h-3.5 text-indigo-600" />
-              <span>+ Software</span>
-            </button>
-
-            {/* Google Sheets Live Link & Sync Toolbar */}
-            <div className="flex items-center space-x-1.5 pl-1 border-l border-slate-200">
-              {!isGoogleConnected && (
-                <button
-                  type="button"
-                  onClick={() => connectGoogle()}
-                  className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-md text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
-                  title="Connect Google Account for Live Sheet write access"
-                >
-                  Connect Google
-                </button>
-              )}
-
-              <a
-                href={currentSpreadsheetUrl || EXCEL_SOFTWARE_REGISTRY_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors"
-                title="Open Connected Spreadsheet in Google Sheets"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              </a>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  setIsExportingAll(true);
-                  try {
-                    if (!isGoogleConnected) {
-                      await connectGoogle();
-                    }
-                    await exportToGoogleSheets();
-                  } catch (e: any) {
-                    console.warn('Sync error:', e);
-                  } finally {
-                    setIsExportingAll(false);
-                  }
-                }}
-                disabled={isExportingAll || isSyncingSheets}
-                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
-                title="Sync all assets & records live to Google Sheet"
-              >
-                <UploadCloud className={`w-3.5 h-3.5 text-emerald-600 ${isExportingAll ? 'animate-bounce' : ''}`} />
-                <span>{isExportingAll ? 'Syncing...' : 'Sync to Sheet'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  refreshSoftwareLicensesFromExcel(true);
-                  refreshFromGoogleSheets(true);
-                }}
-                disabled={isSyncingSheets}
-                className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-                title="Refresh Master Registry Data from Google Sheets"
-              >
-                <RefreshCw className={`w-4 h-4 ${isSyncingSheets ? 'animate-spin text-teal-600' : ''}`} />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsSheetsModalOpen(true)}
-                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-                title="Google Sheets & Webhook Configuration"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -810,13 +713,12 @@ export const AssetsView: React.FC = () => {
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
-                                if (window.confirm(`Delete asset ${ast.serialNumber}?`)) {
-                                  deleteAsset(ast.id);
-                                }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAssetToDelete(ast);
                               }}
                               className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-md transition-colors cursor-pointer"
-                              title="Delete Asset"
+                              title="Delete Equipment (Admin only)"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1097,6 +999,18 @@ export const AssetsView: React.FC = () => {
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>Download Passport PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ast = selectedAssetForDetails;
+                        setAssetToDelete(ast);
+                      }}
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-md flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                      title="Delete Equipment Permanently (Admin only)"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
                     </button>
                   </>
                 )}
@@ -1421,6 +1335,70 @@ export const AssetsView: React.FC = () => {
         isOpen={isSheetsModalOpen}
         onClose={() => setIsSheetsModalOpen(false)}
       />
+
+      {/* Admin Delete Confirmation Modal (In-app safe modal, no window.confirm) */}
+      {isAdmin && assetToDelete && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-red-200 dark:border-red-900/50 max-w-md w-full overflow-hidden p-6 space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-xl shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                  Delete Equipment
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Admin Action: Permanently delete equipment record
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-bold uppercase text-[10px]">Serial Number:</span>
+                <span className="font-mono font-black text-teal-800 dark:text-teal-400">{assetToDelete.serialNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-bold uppercase text-[10px]">Model & Brand:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{assetToDelete.model} ({assetToDelete.manufacturer})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-bold uppercase text-[10px]">Customer / Site:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[200px] text-right">{assetToDelete.customerName}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-red-600 dark:text-red-400 font-semibold bg-red-50 dark:bg-red-950/40 p-2.5 rounded-lg border border-red-200 dark:border-red-900/50">
+              ⚠️ Are you sure you want to delete this equipment? This action will remove it from the directory.
+            </p>
+
+            <div className="flex items-center justify-end space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setAssetToDelete(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteAsset(assetToDelete.id);
+                  if (selectedAssetForDetails?.id === assetToDelete.id) {
+                    setSelectedAssetForDetails(null);
+                  }
+                  setAssetToDelete(null);
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-all shadow-md cursor-pointer flex items-center space-x-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Yes, Delete Equipment</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
